@@ -13,7 +13,8 @@
       {
         "title": "codestrux",
         "width": 1600,
-        "height": 900
+        "height": 900,
+        "decorations": false
       }
     ],
     "security": {

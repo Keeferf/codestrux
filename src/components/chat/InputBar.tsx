@@ -27,15 +27,15 @@ export function InputBar({
   };
 
   return (
-    <div className="shrink-0 px-4.5 pt-3 pb-4 bg-slate-grey-900 border-t border-slate-grey-800">
-      <div className="flex gap-2 items-end bg-slate-grey-950 border border-slate-grey-800 rounded-lg p-2.5">
+    <div className="shrink-0 px-4.5 py-2 bg-slate-grey-900 border-t border-slate-grey-800">
+      <div className="flex gap-2 items-center bg-slate-grey-950 border border-slate-grey-800 rounded-lg p-2">
         <textarea
           value={input}
           onChange={(e) => onInputChange(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Message…"
           rows={1}
-          className="flex-1 bg-transparent border-none outline-none resize-none font-body text-sm leading-relaxed min-h-5 text-parchment-200 placeholder:text-slate-grey-500 py-1.5"
+          className="flex-1 bg-transparent border-none outline-none resize-none font-body text-sm leading-relaxed min-h-5 text-parchment-200 placeholder:text-slate-grey-500 py-1"
         />
         <button
           onClick={onSend}
