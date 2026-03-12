@@ -22,7 +22,7 @@ export default function App() {
   const [availableModels] = useState<string[]>([]);
   const [model, setModel] = useState<string>("");
   const [creativity, setCreativity] = useState<CreativityKey>("balanced");
-  const [showSettings, setShowSettings] = useState<boolean>(true);
+  const [showSettings, setShowSettings] = useState<boolean>(false);
   const [isReady, setIsReady] = useState<boolean>(false);
 
   useEffect(() => {

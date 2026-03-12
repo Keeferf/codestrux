@@ -1,5 +1,4 @@
 use sysinfo::System;
-use wgpu::Instance;
 
 // ── Structs ───────────────────────────────────────────────────────────────────
 
@@ -21,7 +20,7 @@ pub struct MemoryInfo {
 pub struct GpuInfo {
     pub name: String,
     pub vram_total_gb: f64,
-    pub vram_used_gb: Option<f64>,  // None on non-Windows platforms
+    pub vram_used_gb: Option<f64>,
 }
 
 #[derive(serde::Serialize)]
@@ -31,13 +30,23 @@ pub struct HardwareInfo {
     pub gpu: Option<GpuInfo>,
 }
 
-// ── WMI VRAM usage (Windows only) ────────────────────────────────────────────
+// ── WMI + Registry GPU info (Windows only) ───────────────────────────────────
 
 #[cfg(windows)]
-fn query_vram_used_gb() -> Option<f64> {
-    use wmi::WMIConnection;
+fn query_gpu_info() -> Option<GpuInfo> {
     use serde::Deserialize;
+    use winreg::{enums::*, RegKey};
+    use wmi::WMIConnection;
 
+    // GPU name via WMI — AdapterRAM intentionally ignored (uint32 caps at ~4 GB)
+    #[derive(Deserialize)]
+    #[serde(rename = "Win32_VideoController")]
+    struct VideoController {
+        #[serde(rename = "Name")]
+        name: String,
+    }
+
+    // Live VRAM usage
     #[derive(Deserialize)]
     #[serde(rename = "Win32_PerfFormattedData_GPUPerformanceCounters_GPULocalAdapterMemory")]
     struct GpuMemPerf {
@@ -46,15 +55,55 @@ fn query_vram_used_gb() -> Option<f64> {
     }
 
     let wmi = WMIConnection::new().ok()?;
-    let results: Vec<GpuMemPerf> = wmi.query().ok()?;
+    let gb = 1_073_741_824.0_f64;
 
-    // Sum across all adapter segments and convert KB → GB
-    let total_kb: u64 = results.iter().map(|r| r.local_adapter_memory_usage).sum();
-    Some(total_kb as f64 / (1024.0 * 1024.0))
+    let name = wmi
+        .query::<VideoController>()
+        .ok()?
+        .into_iter()
+        .next()?
+        .name;
+
+    // Read total VRAM from the registry — HardwareInformation.qwMemorySize is a
+    // 64-bit QWORD so it correctly reports 8 GB, 16 GB, 24 GB, etc.
+    let vram_total_gb = {
+        let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+        let class = hklm
+            .open_subkey(
+                r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}",
+            )
+            .ok()?;
+
+        class
+            .enum_keys()
+            .filter_map(|k| k.ok())
+            .filter_map(|subkey_name| class.open_subkey(&subkey_name).ok())
+            .find_map(|subkey| {
+                // Stored as REG_BINARY — 8 bytes, little-endian u64
+                let raw = subkey
+                    .get_raw_value("HardwareInformation.qwMemorySize")
+                    .ok()?;
+                let bytes: [u8; 8] = raw.bytes.try_into().ok()?;
+                let vram_bytes = u64::from_le_bytes(bytes);
+                (vram_bytes > 0).then(|| vram_bytes as f64 / gb)
+            })?
+    };
+
+    let used_kb: u64 = wmi
+        .query::<GpuMemPerf>()
+        .ok()
+        .map(|rows| rows.iter().map(|r| r.local_adapter_memory_usage).sum())
+        .unwrap_or(0);
+
+    Some(GpuInfo {
+        name,
+        vram_total_gb,
+        vram_used_gb: (used_kb > 0).then(|| used_kb as f64 / (1024.0 * 1024.0)),
+    })
 }
 
 #[cfg(not(windows))]
-fn query_vram_used_gb() -> Option<f64> {
+fn query_gpu_info() -> Option<GpuInfo> {
     None
 }
 
@@ -82,24 +131,6 @@ async fn get_hardware_info() -> HardwareInfo {
         0.0
     };
 
-    // GPU — first adapter for name + total VRAM, WMI for live usage
-    let instance = Instance::default();
-    let gpu = instance
-        .enumerate_adapters(wgpu::Backends::all())
-        .await
-        .into_iter()
-        .next()
-        .map(|a: wgpu::Adapter| {
-            let info = a.get_info();
-            let vram_total_gb = a.limits().max_buffer_size as f64 / gb;
-            let vram_used_gb = query_vram_used_gb();
-            GpuInfo {
-                name: info.name,
-                vram_total_gb,
-                vram_used_gb,
-            }
-        });
-
     HardwareInfo {
         cpu: CpuInfo {
             name: cpu_name,
@@ -111,7 +142,7 @@ async fn get_hardware_info() -> HardwareInfo {
             used_gb: used_mem / gb,
             usage: mem_usage,
         },
-        gpu,
+        gpu: query_gpu_info(),
     }
 }
 
