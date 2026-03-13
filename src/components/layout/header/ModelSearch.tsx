@@ -183,9 +183,6 @@ export function ModelSearch({ model, onModelChange }: ModelSearchProps) {
                 className="text-slate-grey-600 group-hover:text-slate-grey-400 transition-colors"
               />
             )}
-            <kbd className="hidden group-hover:inline-flex items-center px-1 py-px bg-slate-grey-800 border border-slate-grey-700 rounded text-[9px] font-mono text-slate-grey-400">
-              ⌘P
-            </kbd>
           </div>
         </button>
       ) : (

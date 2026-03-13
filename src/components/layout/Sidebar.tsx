@@ -1,4 +1,12 @@
-import { Plus, Cpu, X, Settings } from "lucide-react";
+import { useState } from "react";
+import {
+  Plus,
+  Cpu,
+  X,
+  Settings,
+  PanelLeftClose,
+  PanelLeftOpen,
+} from "lucide-react";
 import type { Session } from "../../types";
 
 interface SidebarProps {
@@ -20,6 +28,51 @@ export function Sidebar({
   showSettings,
   onToggleSettings,
 }: SidebarProps) {
+  const [collapsed, setCollapsed] = useState(false);
+
+  if (collapsed) {
+    return (
+      <aside className="w-12 shrink-0 flex flex-col items-center bg-slate-grey-900 border-r border-slate-grey-800 overflow-hidden py-2 gap-1">
+        {/* Expand button */}
+        <button
+          onClick={() => setCollapsed(false)}
+          className="flex items-center justify-center w-8 h-8 rounded-md text-slate-grey-500 hover:text-parchment-300 hover:bg-slate-grey-800 transition-all duration-150 cursor-pointer"
+          aria-label="Expand sidebar"
+          title="Expand sidebar"
+        >
+          <PanelLeftOpen size={15} />
+        </button>
+
+        {/* New session button */}
+        <button
+          onClick={onNewSession}
+          className="flex items-center justify-center w-8 h-8 rounded-md text-slate-grey-500 hover:text-indigo-smoke-400 hover:bg-slate-grey-800 transition-all duration-150 cursor-pointer border border-slate-grey-800 hover:border-indigo-smoke-700"
+          aria-label="Create new session"
+          title="New session"
+        >
+          <Plus size={15} />
+        </button>
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Settings button */}
+        <button
+          onClick={onToggleSettings}
+          className={`flex items-center justify-center w-8 h-8 rounded-md transition-all duration-150 cursor-pointer mb-0.5 ${
+            showSettings
+              ? "bg-indigo-smoke-900/50 text-indigo-smoke-400"
+              : "text-slate-grey-500 hover:text-parchment-300 hover:bg-slate-grey-800"
+          }`}
+          aria-label="Settings"
+          title="Settings"
+        >
+          <Settings size={14} />
+        </button>
+      </aside>
+    );
+  }
+
   return (
     <aside className="w-55 shrink-0 flex flex-col bg-slate-grey-900 border-r border-slate-grey-800 overflow-hidden">
       <div className="flex-1 overflow-y-auto p-2">
@@ -27,14 +80,26 @@ export function Sidebar({
           <span className="font-display text-[10px] uppercase tracking-[1.2px] text-slate-grey-500">
             sessions
           </span>
-          <button
-            onClick={onNewSession}
-            className="flex items-center gap-1 bg-transparent border border-slate-grey-800 rounded-md cursor-pointer px-2.5 py-1.5 text-slate-grey-500 hover:text-indigo-smoke-400 hover:border-indigo-smoke-700 hover:bg-slate-grey-950 transition-all duration-150"
-            aria-label="Create new session"
-          >
-            <Plus size={14} />
-            <span className="font-display text-[10px]">new</span>
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={onNewSession}
+              className="flex items-center justify-center w-7 h-7 bg-transparent border border-slate-grey-800 rounded-md cursor-pointer text-slate-grey-500 hover:text-indigo-smoke-400 hover:border-indigo-smoke-700 hover:bg-slate-grey-950 transition-all duration-150"
+              aria-label="Create new session"
+              title="New session"
+            >
+              <Plus size={14} />
+            </button>
+
+            {/* Collapse button */}
+            <button
+              onClick={() => setCollapsed(true)}
+              className="flex items-center justify-center w-7 h-7 rounded-md text-slate-grey-500 hover:text-parchment-300 hover:bg-slate-grey-800 transition-all duration-150 cursor-pointer"
+              aria-label="Collapse sidebar"
+              title="Collapse sidebar"
+            >
+              <PanelLeftClose size={14} />
+            </button>
+          </div>
         </div>
 
         {sessions.length === 0 && (

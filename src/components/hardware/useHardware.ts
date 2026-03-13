@@ -4,19 +4,16 @@ import { invoke } from "@tauri-apps/api/core";
 export interface CpuInfo {
   name: string;
   cores: number;
-  usage: number;
 }
 
 export interface MemoryInfo {
   total_gb: number;
-  used_gb: number;
-  usage: number;
 }
 
 export interface GpuInfo {
   name: string;
-  vram_total_gb: number;
-  vram_used_gb: number | null; // null on non-Windows
+  backend: string; // e.g. "Vulkan", "Metal", "DirectX 12"
+  vram_gb: number | null; // max_buffer_size limit, null if unavailable
 }
 
 export interface HardwareInfo {
