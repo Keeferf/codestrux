@@ -24,8 +24,8 @@ pub fn run() {
             store::get_downloaded_models,
             store::delete_downloaded_model,
             // model download
-            download::start_download,
-            download::cancel_download,
+            download::commands::start_download,
+            download::commands::cancel_download,
             // chat (wired up later)
             chat::start_chat,
             chat::stop_chat,

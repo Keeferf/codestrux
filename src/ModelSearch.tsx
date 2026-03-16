@@ -70,7 +70,7 @@ function formatDownloads(n: number): string {
 async function searchModels(query: string): Promise<HFModel[]> {
   const codingQuery = `${query} code`;
   const res = await fetch(
-    `https://huggingface.co/api/models?search=${encodeURIComponent(codingQuery)}&pipeline_tag=text-generation&limit=20&sort=downloads&direction=-1`,
+    `https://huggingface.co/api/models?search=${encodeURIComponent(codingQuery)}&pipeline_tag=text-generation&filter=gguf&limit=20&sort=downloads&direction=-1`,
   );
   const all: HFModel[] = await res.json();
   const coderOnly = all.filter((m) => isCoderModel(m.id));

@@ -17,7 +17,6 @@ pub struct MemoryInfo {
 #[derive(serde::Serialize)]
 pub struct GpuInfo {
     pub name: String,
-    pub backend: String,
     pub vram_gb: Option<f64>,
 }
 
@@ -35,8 +34,17 @@ pub struct HardwareInfo {
 fn shorten_cpu_name(raw: &str) -> String {
     let s = raw
         .replace("(R)", "")
-        .replace("(TM)", "")
-        .replace("(C)", "");
+        .replace("(TM)", "");
+
+    // Strip ordinal generation prefix: "12th Gen", "13th Gen", "3rd Gen", etc.
+    let words: Vec<&str> = s.split_whitespace().collect();
+    let s = match words.as_slice() {
+        [gen, tag, rest @ ..] if
+            tag.eq_ignore_ascii_case("gen") &&
+            (gen.ends_with("th") || gen.ends_with("st") || gen.ends_with("nd") || gen.ends_with("rd")) =>
+            rest.join(" "),
+        _ => words.join(" "),
+    };
 
     let s = s
         .find(" CPU @")
@@ -44,7 +52,7 @@ fn shorten_cpu_name(raw: &str) -> String {
         .map(|i| s[..i].to_string())
         .unwrap_or(s);
 
-    let noise = ["Processor", "processor", "CPU", "cpu"];
+    let noise = ["Processor", "CPU"];
     let words: Vec<&str> = s
         .split_whitespace()
         .filter(|w| !noise.contains(w) && !w.ends_with("-Core") && !w.ends_with("-core"))
@@ -65,9 +73,15 @@ fn shorten_cpu_name(raw: &str) -> String {
 fn shorten_gpu_name(raw: &str) -> String {
     let s = raw
         .replace("(R)", "")
-        .replace("(TM)", "")
-        .replace("(C)", "");
-    let s = s.trim();
+        .replace("(TM)", "");
+    // Strip trailing laptop qualifiers first, before any early returns
+    let mut s = s.trim().to_string();
+    for phrase in &["Laptop GPU", "Laptop"] {
+        if let Some(stripped) = s.trim_end().strip_suffix(phrase) {
+            s = stripped.trim_end().to_string();
+        }
+    }
+    let s = s.as_str();
 
     let sub_brands = [
         ("NVIDIA GeForce ", "NVIDIA "),
@@ -80,18 +94,6 @@ fn shorten_gpu_name(raw: &str) -> String {
     }
 
     s.to_string()
-}
-
-fn fmt_backend(backend: wgpu::Backend) -> String {
-    match backend {
-        wgpu::Backend::Vulkan        => "Vulkan",
-        wgpu::Backend::Metal         => "Metal",
-        wgpu::Backend::Dx12          => "DirectX 12",
-        wgpu::Backend::Gl            => "OpenGL",
-        wgpu::Backend::BrowserWebGpu => "WebGPU",
-        _                            => "Unknown",
-    }
-    .to_string()
 }
 
 // ── VRAM total (Windows only) ─────────────────────────────────────────────────
@@ -113,7 +115,7 @@ fn query_vram_total_gb() -> Option<f64> {
             let raw = subkey
                 .get_raw_value("HardwareInformation.qwMemorySize")
                 .ok()?;
-            let bytes: [u8; 8] = raw.bytes.try_into().ok()?;
+            let bytes: [u8; 8] = raw.bytes.as_ref().try_into().ok()?;
             let vram_bytes = u64::from_le_bytes(bytes);
             (vram_bytes > 0).then(|| vram_bytes as f64 / 1_073_741_824.0)
         })
@@ -148,7 +150,6 @@ pub async fn get_hardware_info() -> HardwareInfo {
             let info = adapter.get_info();
             GpuInfo {
                 name: shorten_gpu_name(&info.name),
-                backend: fmt_backend(info.backend),
                 vram_gb: query_vram_total_gb(),
             }
         });

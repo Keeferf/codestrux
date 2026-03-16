@@ -12,13 +12,12 @@
     "windows": [
       {
         "title": "codestrux",
-        "width": 1600,
-        "height": 900,
+        "fullscreen": true,
         "decorations": false
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost"
     }
   },
   "bundle": {

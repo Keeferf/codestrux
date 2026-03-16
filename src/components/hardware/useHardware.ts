@@ -12,8 +12,7 @@ export interface MemoryInfo {
 
 export interface GpuInfo {
   name: string;
-  backend: string; // e.g. "Vulkan", "Metal", "DirectX 12"
-  vram_gb: number | null; // max_buffer_size limit, null if unavailable
+  vram_gb: number | null;
 }
 
 export interface HardwareInfo {
@@ -27,14 +26,18 @@ interface UseHardwareOptions {
   interval?: number;
 }
 
+// Module-level cache — survives unmount/remount so the panel never flashes blank
+let cachedData: HardwareInfo | null = null;
+
 export function useHardware({ interval = 2000 }: UseHardwareOptions = {}) {
-  const [data, setData] = useState<HardwareInfo | null>(null);
+  const [data, setData] = useState<HardwareInfo | null>(cachedData);
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(cachedData === null);
 
   const fetch = useCallback(async () => {
     try {
       const info = await invoke<HardwareInfo>("get_hardware_info");
+      cachedData = info;
       setData(info);
       setError(null);
     } catch (e) {
