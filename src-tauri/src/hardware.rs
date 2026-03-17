@@ -141,18 +141,38 @@ pub async fn get_hardware_info() -> HardwareInfo {
 
     let total_mem = sys.total_memory() as f64 / 1_073_741_824.0;
 
-    let gpu = Instance::default()
-        .enumerate_adapters(wgpu::Backends::all())
-        .await
-        .into_iter()
-        .next()
-        .map(|adapter| {
-            let info = adapter.get_info();
-            GpuInfo {
-                name: shorten_gpu_name(&info.name),
-                vram_gb: query_vram_total_gb(),
-            }
-        });
+    let gpu = {
+        let adapters = Instance::default()
+            .enumerate_adapters(wgpu::Backends::all())
+            .await;
+
+        // Score adapters: discrete > integrated > other. Among equal types, prefer
+        // the one with more VRAM so a dedicated laptop GPU beats the iGPU.
+        adapters
+            .into_iter()
+            .filter(|a| {
+                !matches!(
+                    a.get_info().device_type,
+                    wgpu::DeviceType::Cpu | wgpu::DeviceType::Other
+                )
+            })
+            .max_by_key(|a| {
+                let type_score = match a.get_info().device_type {
+                    wgpu::DeviceType::DiscreteGpu   => 2u64 << 32,
+                    wgpu::DeviceType::IntegratedGpu => 1u64 << 32,
+                    _                               => 0,
+                };
+                let vram_score = query_vram_total_gb().map_or(0, |gb| gb as u64);
+                type_score + vram_score
+            })
+            .map(|adapter| {
+                let info = adapter.get_info();
+                GpuInfo {
+                    name: shorten_gpu_name(&info.name),
+                    vram_gb: query_vram_total_gb(),
+                }
+            })
+    };
 
     HardwareInfo {
         cpu: CpuInfo {

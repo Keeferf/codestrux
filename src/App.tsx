@@ -204,7 +204,7 @@ export default function App() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-slate-grey-950 text-parchment-300">
+    <div className="flex flex-col h-screen w-screen overflow-hidden overscroll-none bg-slate-grey-950 text-parchment-300">
       <Header
         model={model}
         onModelChange={setModel}

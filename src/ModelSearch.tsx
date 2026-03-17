@@ -13,7 +13,8 @@ import {
   formatBytes,
   type HFFile,
 } from "./lib/Download";
-
+import { useHardware } from "./components/hardware/useHardware";
+import { checkCompat } from "./lib/ModalCombatability";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface HFModel {
@@ -102,6 +103,8 @@ export function ModelSearch({
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const { data: hardware } = useHardware({ interval: 0 });
 
   // ── Search logic ──────────────────────────────────────────────────────────
 
@@ -402,56 +405,62 @@ export function ModelSearch({
                 </div>
               ) : (
                 <div className="max-h-52 overflow-y-auto">
-                  {ggufFiles.map((f) => {
-                    const key = `${expandedModel!.id}::${f.rfilename}`;
-                    const isDownloading = downloading.has(key);
-                    const isDone = downloadedModelIds.includes(
-                      expandedModel!.id,
-                    );
+                  {ggufFiles
+                    .filter((f) =>
+                      hardware
+                        ? checkCompat(f.rfilename, hardware).compatible
+                        : true,
+                    )
+                    .map((f) => {
+                      const key = `${expandedModel!.id}::${f.rfilename}`;
+                      const isDownloading = downloading.has(key);
+                      const isDone = downloadedModelIds.includes(
+                        expandedModel!.id,
+                      );
 
-                    return (
-                      <div
-                        key={f.rfilename}
-                        className="flex items-center gap-3 px-3 py-1.5 hover:bg-slate-grey-900 border-l-2 border-transparent hover:border-indigo-smoke-700 transition-colors group"
-                      >
-                        <span className="font-mono text-xs text-parchment-300 truncate flex-1 min-w-0">
-                          {f.rfilename}
-                        </span>
-                        {f.size != null && (
-                          <span className="font-mono text-[10px] text-slate-grey-600 flex-shrink-0 tabular-nums">
-                            {formatBytes(f.size)}
-                          </span>
-                        )}
-                        <button
-                          onClick={() =>
-                            handleDownload(expandedModel!.id, f.rfilename)
-                          }
-                          disabled={isDownloading}
-                          className={`flex-shrink-0 flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono transition-all border ${
-                            isDone
-                              ? "border-moss-green-800 text-moss-green-600 bg-moss-green-950/40 cursor-default"
-                              : isDownloading
-                                ? "border-indigo-smoke-800 text-indigo-smoke-500 bg-indigo-smoke-950/40 cursor-wait"
-                                : "border-slate-grey-700 text-slate-grey-400 hover:border-indigo-smoke-600 hover:text-indigo-smoke-400 hover:bg-indigo-smoke-950/20"
-                          }`}
+                      return (
+                        <div
+                          key={f.rfilename}
+                          className="flex items-center gap-3 px-3 py-1.5 hover:bg-slate-grey-900 border-l-2 border-transparent hover:border-indigo-smoke-700 transition-colors group"
                         >
-                          {isDone ? (
-                            <>
-                              <CheckCircle2 size={9} /> done
-                            </>
-                          ) : isDownloading ? (
-                            <>
-                              <Loader2 size={9} className="animate-spin" /> …
-                            </>
-                          ) : (
-                            <>
-                              <Download size={9} /> get
-                            </>
+                          <span className="font-mono text-xs text-parchment-300 truncate flex-1 min-w-0">
+                            {f.rfilename}
+                          </span>
+                          {f.size != null && (
+                            <span className="font-mono text-[10px] text-slate-grey-600 flex-shrink-0 tabular-nums">
+                              {formatBytes(f.size)}
+                            </span>
                           )}
-                        </button>
-                      </div>
-                    );
-                  })}
+                          <button
+                            onClick={() =>
+                              handleDownload(expandedModel!.id, f.rfilename)
+                            }
+                            disabled={isDownloading}
+                            className={`flex-shrink-0 flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono transition-all border ${
+                              isDone
+                                ? "border-moss-green-800 text-moss-green-600 bg-moss-green-950/40 cursor-default"
+                                : isDownloading
+                                  ? "border-indigo-smoke-800 text-indigo-smoke-500 bg-indigo-smoke-950/40 cursor-wait"
+                                  : "border-slate-grey-700 text-slate-grey-400 hover:border-indigo-smoke-600 hover:text-indigo-smoke-400 hover:bg-indigo-smoke-950/20"
+                            }`}
+                          >
+                            {isDone ? (
+                              <>
+                                <CheckCircle2 size={9} /> done
+                              </>
+                            ) : isDownloading ? (
+                              <>
+                                <Loader2 size={9} className="animate-spin" /> …
+                              </>
+                            ) : (
+                              <>
+                                <Download size={9} /> get
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      );
+                    })}
                 </div>
               )}
 
