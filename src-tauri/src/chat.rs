@@ -9,18 +9,36 @@ use tauri::{AppHandle, Emitter, State};
 
 use crate::store::read_token;
 
-// ── Shared cancel flag ────────────────────────────────────────────────────────
+// ── Shared state ──────────────────────────────────────────────────────────────
 
 /// Held in Tauri's managed state. A single flag is enough because only one
 /// streaming request runs at a time (the UI blocks sending while loading).
+///
+/// The reqwest::Client is stored here so that connection pooling and TLS
+/// sessions to api-inference.huggingface.co are reused across requests,
+/// rather than rebuilding from scratch on every chat message.
 pub struct ChatState {
     pub cancel: Arc<AtomicBool>,
+    pub client: reqwest::Client,
 }
 
 impl Default for ChatState {
     fn default() -> Self {
         Self {
             cancel: Arc::new(AtomicBool::new(false)),
+            // Accept-Encoding: identity prevents transparent decompression of
+            // the SSE stream, which would corrupt chunked delivery.
+            client: reqwest::Client::builder()
+                .default_headers({
+                    let mut h = reqwest::header::HeaderMap::new();
+                    h.insert(
+                        reqwest::header::ACCEPT_ENCODING,
+                        "identity".parse().unwrap(),
+                    );
+                    h
+                })
+                .build()
+                .expect("Failed to build chat HTTP client"),
         }
     }
 }
@@ -66,17 +84,23 @@ pub async fn start_chat(
         model
     );
 
-    let client = reqwest::Client::new();
-    let response = client
+    // Fix: .json() requires reqwest's "json" feature, which was removed because
+    // the download module doesn't need it. Serialize manually and use .body()
+    // instead — identical behaviour since Content-Type is already set explicitly.
+    let body = serde_json::to_string(&serde_json::json!({
+        "model": model,
+        "messages": messages,
+        "stream": true,
+        "max_tokens": 2048,
+    }))
+    .map_err(|e| e.to_string())?;
+
+    let response = state
+        .client
         .post(&url)
         .header("Authorization", format!("Bearer {}", token))
         .header("Content-Type", "application/json")
-        .json(&serde_json::json!({
-            "model": model,
-            "messages": messages,
-            "stream": true,
-            "max_tokens": 2048,
-        }))
+        .body(body)
         .send()
         .await
         .map_err(|e| {

@@ -26,7 +26,7 @@ pub async fn start_download(
     let safe_id = sanitise_model_id(&model_id)?;
 
     state.reset();
-    let cancel = Arc::clone(&state.cancel);
+    let cancel = state.cancel_flag();
 
     let url = format!(
         "https://huggingface.co/{}/resolve/main/{}",
@@ -142,5 +142,5 @@ pub async fn start_download(
 
 #[tauri::command]
 pub fn cancel_download(state: State<'_, DownloadState>) {
-    state.cancel.store(true, Ordering::SeqCst);
+    state.request_cancel();
 }
