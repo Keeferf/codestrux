@@ -79,7 +79,7 @@ export function SettingsPanel({
 
       {/* ── Downloaded models ─────────────────────────────────────────────── */}
       <div>
-        <SectionHead label="local models" />
+        <SectionHead label="Models" />
 
         {downloadedModels.length === 0 ? (
           <div className="rounded-md bg-slate-grey-950 border border-slate-grey-800 px-3 py-2.5">

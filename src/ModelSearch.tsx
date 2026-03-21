@@ -248,7 +248,7 @@ export function ModelSearch({
             className="text-slate-grey-600 group-hover:text-indigo-smoke-500 flex-shrink-0 transition-colors"
           />
           <span className="font-mono text-xs flex-1 text-left truncate text-slate-grey-500 group-hover:text-parchment-400 transition-colors">
-            Download a coder model…
+            Download a model…
           </span>
           {downloadedModelIds.length > 0 && (
             <span className="font-mono text-[10px] text-moss-green-600 flex-shrink-0">
