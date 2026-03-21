@@ -1,29 +1,45 @@
+//! Hardware introspection — CPU, memory, and GPU detection.
+//!
+//! CPU and memory are queried via [`sysinfo`]. GPU enumeration uses [`wgpu`]
+//! for cross-platform adapter discovery; VRAM is read from the Windows registry
+//! on Windows and left as `None` on other platforms.
+
 use sysinfo::System;
 use wgpu::Instance;
 
 // ── Structs ───────────────────────────────────────────────────────────────────
 
+/// CPU model name and logical core count.
 #[derive(serde::Serialize)]
 pub struct CpuInfo {
+    /// Shortened, human-readable model name (trademark symbols and clock speed
+    /// stripped).
     pub name: String,
     pub cores: usize,
 }
 
+/// Total system RAM.
 #[derive(serde::Serialize)]
 pub struct MemoryInfo {
     pub total_gb: f64,
 }
 
+/// Best available GPU and its total VRAM.
 #[derive(serde::Serialize)]
 pub struct GpuInfo {
+    /// Shortened, human-readable adapter name (sub-brand and laptop qualifier
+    /// stripped).
     pub name: String,
+    /// `None` on non-Windows platforms where VRAM cannot be queried reliably.
     pub vram_gb: Option<f64>,
 }
 
+/// Aggregated hardware snapshot returned to the frontend.
 #[derive(serde::Serialize)]
 pub struct HardwareInfo {
     pub cpu: CpuInfo,
     pub memory: MemoryInfo,
+    /// `None` when no discrete or integrated GPU is detected.
     pub gpu: Option<GpuInfo>,
 }
 
@@ -58,6 +74,8 @@ fn shorten_cpu_name(raw: &str) -> String {
         .filter(|w| !noise.contains(w) && !w.ends_with("-Core") && !w.ends_with("-core"))
         .collect();
 
+    // Intel CPUs include the redundant word "Core" between the brand and model
+    // number (e.g. "Intel Core i9"); strip it for a cleaner display name.
     let words = if words.first().copied() == Some("Intel") {
         words.into_iter().filter(|w| *w != "Core").collect::<Vec<_>>()
     } else {
@@ -74,7 +92,8 @@ fn shorten_gpu_name(raw: &str) -> String {
     let s = raw
         .replace("(R)", "")
         .replace("(TM)", "");
-    // Strip trailing laptop qualifiers first, before any early returns
+    // Laptop qualifiers must be stripped before prefix matching so that
+    // e.g. "NVIDIA GeForce RTX 4060 Laptop GPU" still hits the prefix table.
     let mut s = s.trim().to_string();
     for phrase in &["Laptop GPU", "Laptop"] {
         if let Some(stripped) = s.trim_end().strip_suffix(phrase) {
@@ -98,6 +117,8 @@ fn shorten_gpu_name(raw: &str) -> String {
 
 // ── VRAM total (Windows only) ─────────────────────────────────────────────────
 
+// wgpu's `limits().max_buffer_size` is not a reliable VRAM proxy, so on
+// Windows we read the authoritative value directly from the driver registry key.
 #[cfg(windows)]
 fn query_vram_total_gb() -> Option<f64> {
     use winreg::{enums::*, RegKey};
@@ -128,6 +149,11 @@ fn query_vram_total_gb() -> Option<f64> {
 
 // ── Command ───────────────────────────────────────────────────────────────────
 
+/// Returns a snapshot of the host CPU, memory, and best available GPU.
+///
+/// GPU selection prefers discrete over integrated adapters; among equal types
+/// the adapter with the most VRAM wins, so a dedicated laptop GPU beats the
+/// iGPU. CPU and software-only adapters are excluded entirely.
 #[tauri::command]
 pub async fn get_hardware_info() -> HardwareInfo {
     let mut sys = System::new_all();
@@ -146,8 +172,9 @@ pub async fn get_hardware_info() -> HardwareInfo {
             .enumerate_adapters(wgpu::Backends::all())
             .await;
 
-        // Score adapters: discrete > integrated > other. Among equal types, prefer
-        // the one with more VRAM so a dedicated laptop GPU beats the iGPU.
+        // Queried once here rather than once per adapter inside the iterator.
+        let vram_gb = query_vram_total_gb();
+
         adapters
             .into_iter()
             .filter(|a| {
@@ -162,15 +189,12 @@ pub async fn get_hardware_info() -> HardwareInfo {
                     wgpu::DeviceType::IntegratedGpu => 1u64 << 32,
                     _                               => 0,
                 };
-                let vram_score = query_vram_total_gb().map_or(0, |gb| gb as u64);
+                let vram_score = vram_gb.map_or(0, |gb| gb as u64);
                 type_score + vram_score
             })
-            .map(|adapter| {
-                let info = adapter.get_info();
-                GpuInfo {
-                    name: shorten_gpu_name(&info.name),
-                    vram_gb: query_vram_total_gb(),
-                }
+            .map(|adapter| GpuInfo {
+                name: shorten_gpu_name(&adapter.get_info().name),
+                vram_gb,
             })
     };
 

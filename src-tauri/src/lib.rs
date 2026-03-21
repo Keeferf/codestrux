@@ -1,3 +1,8 @@
+//! Tauri application entry point.
+//!
+//! Registers all managed state, plugins, and command handlers, then starts
+//! the Tauri event loop.
+
 mod chat;
 mod download;
 mod hardware;
@@ -6,6 +11,11 @@ mod store;
 use chat::ChatState;
 use download::DownloadState;
 
+/// Builds and runs the Tauri application.
+///
+/// # Panics
+///
+/// Panics if the Tauri runtime fails to start.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -26,7 +36,7 @@ pub fn run() {
             // model download
             download::commands::start_download,
             download::commands::cancel_download,
-            // chat (wired up later)
+            // chat
             chat::start_chat,
             chat::stop_chat,
         ])

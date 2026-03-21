@@ -1,3 +1,8 @@
+//! Streaming chat completion against the HuggingFace Inference API.
+//!
+//! Exposes two Tauri commands: [`start_chat`] opens a streaming SSE connection
+//! and [`stop_chat`] signals it to close after the current chunk.
+
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -11,12 +16,13 @@ use crate::store::read_token;
 
 // ── Shared state ──────────────────────────────────────────────────────────────
 
-/// Held in Tauri's managed state. A single flag is enough because only one
-/// streaming request runs at a time (the UI blocks sending while loading).
+/// Tauri-managed state for the chat subsystem.
 ///
-/// The reqwest::Client is stored here so that connection pooling and TLS
-/// sessions to api-inference.huggingface.co are reused across requests,
-/// rather than rebuilding from scratch on every chat message.
+/// A single cancel flag is sufficient because the UI blocks sending while a
+/// response is streaming, ensuring only one request runs at a time.
+///
+/// The [`reqwest::Client`] is held here so that connection pooling and TLS
+/// sessions to `api-inference.huggingface.co` are reused across requests.
 pub struct ChatState {
     pub cancel: Arc<AtomicBool>,
     pub client: reqwest::Client,
@@ -26,7 +32,7 @@ impl Default for ChatState {
     fn default() -> Self {
         Self {
             cancel: Arc::new(AtomicBool::new(false)),
-            // Accept-Encoding: identity prevents transparent decompression of
+            // `Accept-Encoding: identity` prevents transparent decompression of
             // the SSE stream, which would corrupt chunked delivery.
             client: reqwest::Client::builder()
                 .default_headers({
@@ -45,20 +51,30 @@ impl Default for ChatState {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+/// A single message in a chat conversation.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Message {
+    /// `"user"` or `"assistant"`.
     pub role: String,
     pub content: String,
 }
 
 // ── Commands ──────────────────────────────────────────────────────────────────
 
-/// Begin a streaming chat completion.
+/// Begin a streaming chat completion against the HuggingFace Inference API.
 ///
-/// Emits these events to the frontend:
-///   - `chat-token`  { content: String }
-///   - `chat-done`   {}
-///   - `chat-error`  { message: String }
+/// Emits the following events to the frontend:
+///
+/// | Event        | Payload                  |
+/// |--------------|--------------------------|
+/// | `chat-token` | `String` — partial token |
+/// | `chat-done`  | `()`                     |
+/// | `chat-error` | `String` — error message |
+///
+/// # Errors
+///
+/// Returns an error if no token is stored, the HTTP request fails, or the
+/// server returns a non-success status.
 #[tauri::command]
 pub async fn start_chat(
     app: AppHandle,
@@ -66,11 +82,10 @@ pub async fn start_chat(
     model: String,
     messages: Vec<Message>,
 ) -> Result<(), String> {
-    // Reset the cancel flag before every new request
     state.cancel.store(false, Ordering::SeqCst);
     let cancel = Arc::clone(&state.cancel);
 
-    // Pull token from the secure store — never from JS
+    // Token is read server-side so it is never exposed to the frontend.
     let token = match read_token(&app) {
         Some(t) => t,
         None => {
@@ -84,9 +99,9 @@ pub async fn start_chat(
         model
     );
 
-    // Fix: .json() requires reqwest's "json" feature, which was removed because
-    // the download module doesn't need it. Serialize manually and use .body()
-    // instead — identical behaviour since Content-Type is already set explicitly.
+    // Serialized manually with `.body()` because the reqwest `json` feature is
+    // not enabled — the download module does not need it and enabling features
+    // for a single call site is unnecessary.
     let body = serde_json::to_string(&serde_json::json!({
         "model": model,
         "messages": messages,
@@ -120,7 +135,6 @@ pub async fn start_chat(
     let mut stream = response.bytes_stream();
 
     while let Some(chunk) = stream.next().await {
-        // Honour a stop request from the frontend
         if cancel.load(Ordering::SeqCst) {
             let _ = app.emit("chat-done", ());
             return Ok(());
@@ -152,7 +166,7 @@ pub async fn start_chat(
     Ok(())
 }
 
-/// Signal the running stream to stop after the current chunk.
+/// Signals the running stream to stop after the current chunk.
 #[tauri::command]
 pub fn stop_chat(state: State<'_, ChatState>) {
     state.cancel.store(true, Ordering::SeqCst);
