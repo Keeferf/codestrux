@@ -20,23 +20,20 @@ use super::types::{DownloadProgress, SpeedTracker};
 const MAX_CONNECT_RETRIES: u32 = 3;
 const MAX_STREAM_RETRIES: u32 = 3;
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(250);
-// If no bytes arrive within this window, the connection is considered stalled.
-// Distinct from connect_timeout (15s): this fires on a live-but-silent
-// connection, which would otherwise never trigger stream_error or retry logic.
+// Fires on a live-but-silent connection that would otherwise never trigger
+// stream_error or retry logic. Distinct from the 15 s connect timeout.
 const STALL_TIMEOUT: Duration = Duration::from_secs(30);
-// Channel capacity per chunk: enough to buffer a few network frames ahead of
-// the disk writer without holding too much data in memory.
+// Enough to buffer a few network frames ahead of the disk writer without
+// holding excessive data in memory.
 const WRITER_CHANNEL_CAPACITY: usize = 32;
-// 512KB write buffer: coalesces many small HTTP frames (typically 16–64KB)
-// into fewer, larger syscalls.
+// Coalesces many small HTTP frames (typically 16–64 KB) into fewer, larger
+// syscalls.
 const WRITE_BUF_SIZE: usize = 512 * 1024;
 
-/// Spawns a background task that emits `download-progress` events on a fixed
-/// interval until the download completes, is cancelled, or the handle is aborted.
+/// Emits `download-progress` events at a fixed interval until the download
+/// completes, is cancelled, or the returned handle is aborted.
 ///
-/// Each tick records the current byte count into a rolling-window SpeedTracker
-/// and derives bytes/sec + ETA before emitting. The tracker lives entirely
-/// inside this task — no locking needed.
+/// [`SpeedTracker`] lives entirely inside this task so no locking is needed.
 fn spawn_progress_reporter(
     app: AppHandle,
     downloaded: Arc<AtomicU64>,
@@ -91,18 +88,13 @@ fn spawn_progress_reporter(
     })
 }
 
-/// Spawns a blocking writer thread for one chunk attempt.
+/// Spawns a dedicated blocking writer thread for one chunk attempt.
 ///
-/// The writer opens the pre-allocated file with a plain std::fs::File, seeks
-/// once to `write_from`, then drains the channel with blocking_recv() writing
-/// each frame sequentially into a std::io::BufWriter.
-///
-/// Using std::fs/std::io here is deliberate: tokio::fs::File dispatches every
-/// flush through spawn_blocking internally, which means each 512KB buffer fill
-/// parks the async task waiting for a thread-pool slot. That parking suspends
-/// the TCP receive loop and lets the OS socket buffer fill up, throttling the
-/// sender. A single dedicated blocking thread per chunk has no such overhead —
-/// disk writes run continuously without ever touching the async runtime.
+/// Uses `std::fs`/`std::io` rather than `tokio::fs::File` deliberately:
+/// `tokio::fs::File` routes every flush through `spawn_blocking`, which parks
+/// the async task waiting for a thread-pool slot. That suspends the TCP
+/// receive loop and lets the socket buffer fill, throttling the sender. A
+/// single dedicated blocking thread per chunk avoids this overhead entirely.
 fn spawn_chunk_writer(
     dest: PathBuf,
     write_from: u64,
@@ -111,8 +103,8 @@ fn spawn_chunk_writer(
     tokio::task::spawn_blocking(move || {
         let file = std::fs::OpenOptions::new()
             .write(true)
-            // create(true) without truncate(true): creates the file if it
-            // doesn't exist (stream mode), opens without truncating if it does
+            // `create(true)` without `truncate(true)`: creates the file when
+            // absent (stream mode); opens without truncating when present
             // (parallel mode, where the file is pre-allocated).
             .create(true)
             .open(&dest)
@@ -122,12 +114,11 @@ fn spawn_chunk_writer(
             .seek(SeekFrom::Start(write_from))
             .map_err(|e| e.to_string())?;
 
-        // blocking_recv() is safe inside spawn_blocking — it parks the OS
-        // thread (not a tokio task) while waiting for the next frame.
+        // `blocking_recv` parks the OS thread, not a tokio task, so it is
+        // safe to call from `spawn_blocking`.
         while let Some(data) = rx.blocking_recv() {
             writer.write_all(&data).map_err(|e| e.to_string())?;
         }
-        // Channel closed (sender dropped) — flush remaining buffer to disk.
         writer.flush().map_err(|e| e.to_string())?;
         Ok(())
     })
@@ -146,9 +137,8 @@ pub async fn download_parallel(
     chunks: u64,
 ) -> Result<(), String> {
     {
-        // Pre-allocate the file so concurrent writes to non-overlapping
-        // regions are safe and the OS doesn't need to extend the file
-        // mid-download.
+        // Pre-allocate so concurrent writes to non-overlapping regions are
+        // safe and the OS does not need to extend the file mid-download.
         let f = tokio::fs::File::create(&dest)
             .await
             .map_err(|e| e.to_string())?;
@@ -200,9 +190,8 @@ pub async fn download_parallel(
 
                 let resp = match resp {
                     Ok(r) if r.status().is_success() => {
-                        // Validate that any CDN redirect stayed on the allowed host.
-                        // probe() validated the initial resolved URL; this catches
-                        // a second redirect on the chunk GET itself.
+                        // `probe` validated the initial resolved URL; this
+                        // catches a second redirect on the chunk GET itself.
                         if let Some(host) = r.url().host_str() {
                             if !is_allowed_host(host) {
                                 return Err(format!(
@@ -234,25 +223,23 @@ pub async fn download_parallel(
 
                 // ── Stream phase ─────────────────────────────────────────────
                 //
-                // Spawn a fresh blocking writer from current_start for this
-                // attempt. On retry current_start reflects bytes already
-                // committed to disk, so the new writer seeks past them.
+                // Spawn a fresh writer from `current_start` for this attempt.
+                // On retry, `current_start` reflects bytes already on disk so
+                // the writer seeks past them without re-downloading.
                 let (frame_tx, frame_rx) = mpsc::channel::<Bytes>(WRITER_CHANNEL_CAPACITY);
-                let write_handle =
-                    spawn_chunk_writer(dest.clone(), current_start, frame_rx);
+                let write_handle = spawn_chunk_writer(dest.clone(), current_start, frame_rx);
 
                 let mut stream = resp.bytes_stream();
                 let mut stream_error = false;
 
                 loop {
-                    // Wrap stream.next() in a stall timeout. A connection that
-                    // stays open but sends no bytes would otherwise never
-                    // trigger stream_error — the retry logic would never fire.
+                    // The stall timeout catches a live connection that sends
+                    // no bytes — without it, retry logic would never fire.
                     let next = tokio::time::timeout(STALL_TIMEOUT, stream.next()).await;
 
                     let chunk_res = match next {
                         Ok(Some(r)) => r,
-                        Ok(None) => break, // stream finished cleanly
+                        Ok(None) => break,
                         Err(_stall) => {
                             stream_error = true;
                             break;
@@ -260,7 +247,7 @@ pub async fn download_parallel(
                     };
 
                     if cancel.load(Ordering::Relaxed) {
-                        // Drop sender → writer drains remaining frames and exits.
+                        // Drop the sender so the writer drains and exits cleanly.
                         drop(frame_tx);
                         let _ = write_handle.await;
                         return Ok(());
@@ -275,9 +262,9 @@ pub async fn download_parallel(
                     };
 
                     let len = chunk.len() as u64;
-                    // send().await only suspends if the blocking writer has
-                    // fallen 32 frames behind — natural backpressure without
-                    // ever blocking the OS thread that owns the TCP socket.
+                    // `send().await` only suspends if the writer has fallen
+                    // 32 frames behind — natural backpressure without blocking
+                    // the OS thread that owns the TCP socket.
                     if frame_tx.send(chunk).await.is_err() {
                         return Err(format!("Chunk {} writer died unexpectedly", i));
                     }
@@ -285,7 +272,6 @@ pub async fn download_parallel(
                     downloaded.fetch_add(len, Ordering::Relaxed);
                 }
 
-                // Close the channel so the writer knows to flush and exit.
                 drop(frame_tx);
                 write_handle.await.map_err(|e| e.to_string())??;
 
@@ -297,7 +283,6 @@ pub async fn download_parallel(
                             i, attempts, current_start
                         ));
                     }
-                    // Next iteration spawns a fresh writer from current_start.
                     continue;
                 }
 
@@ -311,13 +296,13 @@ pub async fn download_parallel(
             Ok(Ok(())) => {}
             Ok(Err(e)) => {
                 cancel.store(true, Ordering::SeqCst);
-                join_set.abort_all();
+                // `join_set` is dropped here; `JoinSet::drop` calls `abort_all`.
                 progress_task.abort();
                 return Err(e);
             }
             Err(join_err) => {
                 cancel.store(true, Ordering::SeqCst);
-                join_set.abort_all();
+                // `join_set` is dropped here; `JoinSet::drop` calls `abort_all`.
                 progress_task.abort();
                 return Err(join_err.to_string());
             }
@@ -358,9 +343,9 @@ pub async fn download_stream(
         total,
     );
 
-    // Same async/blocking split as download_parallel: network receive is async,
-    // file writes are in a dedicated blocking thread. spawn_chunk_writer with
-    // write_from=0 creates the file fresh and writes from the beginning.
+    // Same async/blocking split as `download_parallel`: network receive is
+    // async; file writes run in a dedicated blocking thread. `write_from=0`
+    // creates the file fresh and writes from the start.
     let (frame_tx, frame_rx) = mpsc::channel::<Bytes>(WRITER_CHANNEL_CAPACITY);
     let write_handle = spawn_chunk_writer(dest, 0, frame_rx);
 
@@ -371,7 +356,7 @@ pub async fn download_stream(
 
         let chunk = match next {
             Ok(Some(r)) => r,
-            Ok(None) => break, // stream finished cleanly
+            Ok(None) => break,
             Err(_stall) => {
                 drop(frame_tx);
                 let _ = write_handle.await;

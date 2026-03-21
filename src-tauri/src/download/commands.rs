@@ -14,6 +14,17 @@ use super::{
     validate::{sanitise_filename, sanitise_model_id},
 };
 
+/// Downloads a model file from HuggingFace and emits progress events.
+///
+/// Acquires the single download slot, probes the URL for file size and
+/// range-request support, then dispatches to [`download_parallel`] or
+/// [`download_stream`]. Partial files are removed on failure or cancellation.
+///
+/// # Errors
+///
+/// Returns an error string if the filename or model ID are invalid, a download
+/// is already in progress, the network request fails, or the received byte
+/// count does not match the expected total.
 #[tauri::command]
 pub async fn start_download(
     app: AppHandle,
@@ -21,7 +32,6 @@ pub async fn start_download(
     model_id: String,
     filename: String,
 ) -> Result<(), String> {
-    // Validate inputs before doing anything
     sanitise_filename(&filename)?;
     let safe_id = sanitise_model_id(&model_id)?;
 
@@ -29,8 +39,8 @@ pub async fn start_download(
         let _ = app.emit("download-error", &e);
         e
     })?;
-    // _permit is held for the duration of this function and dropped on return,
-    // releasing the download slot whether we succeed, error, or get cancelled.
+    // `_permit` is held for the lifetime of this function; dropping it on
+    // return releases the slot whether the download succeeds, errors, or panics.
 
     let url = format!(
         "https://huggingface.co/{}/resolve/main/{}",
@@ -111,7 +121,6 @@ pub async fn start_download(
         return Ok(());
     }
 
-    // Verify the file is complete before registering it
     let final_bytes = downloaded.load(Ordering::SeqCst);
     if total > 0 && final_bytes != total {
         let _ = tokio::fs::remove_file(&dest).await;
@@ -144,6 +153,7 @@ pub async fn start_download(
     Ok(())
 }
 
+/// Signals the in-progress download to stop at its next cancellation check.
 #[tauri::command]
 pub fn cancel_download(state: State<'_, DownloadState>) {
     state.request_cancel();

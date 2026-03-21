@@ -1,44 +1,38 @@
 use std::time::Duration;
 
 pub const ALLOWED_HOST: &str = "hf.co";
+// Dot-prefixed form used by `is_allowed_host` to validate genuine subdomains.
 const ALLOWED_HOST_SUFFIX: &str = ".hf.co";
-// Ceiling for parallel TCP connections to HuggingFace's Cloudflare CDN.
-//
-// 8 was the original measured sweet spot, but CDN behaviour varies by region
-// and file popularity.  16 is safe to try — if the CDN throttles you, the
-// per-chunk retry logic absorbs the 429/503 without losing progress.
-// Raising above 24 gives diminishing returns: your NIC/ISP upstream becomes
-// the bottleneck before the CDN does.
-//
-// To tune: run the same 7GB download at 8, 12, 16 and compare wall-clock
-// times.  Pick the highest that doesn't trigger CDN rate-limit errors.
+
+/// Maximum number of parallel TCP connections used for chunked downloads.
 pub const MAX_PARALLEL_CHUNKS: u64 = 16;
-// 256MB per chunk gives each TCP connection a long-lived, high-throughput
-// session rather than many short ones with high setup overhead.
-// At 16 chunks this covers files up to 4GB before chunk count saturates;
-// larger files get more chunks up to the ceiling above.
+
+/// Target byte size per chunk for parallel downloads.
 pub const TARGET_CHUNK_SIZE: u64 = 256 * 1024 * 1024;
-// Hard cap on claimed file size. Rejects a server lying about Content-Length
-// or Content-Range before we pre-allocate disk space or begin streaming.
-// 100 GB is well above any current LLM weight file.
+
+/// Maximum accepted file size in bytes (100 GB).
 pub const MAX_FILE_BYTES: u64 = 100 * 1024 * 1024 * 1024;
 
-/// Returns true if `host` is exactly the allowed host or a subdomain of it.
-///
-/// `ends_with(ALLOWED_HOST)` alone is NOT sufficient: `"evilhf.co"` satisfies
-/// `ends_with("hf.co")`. We require either an exact match or a dot-prefixed
-/// suffix so that only genuine subdomains pass (e.g. `cdn-lfs-us-1.hf.co`).
+/// Returns `true` if `host` is exactly [`ALLOWED_HOST`] or a genuine subdomain.
 pub fn is_allowed_host(host: &str) -> bool {
     host == ALLOWED_HOST || host.ends_with(ALLOWED_HOST_SUFFIX)
 }
 
+/// Builds an HTTP client configured for binary file downloads from HuggingFace.
+///
+/// Disables transparent decompression, forces HTTP/1.1 so each chunk gets its
+/// own TCP connection (H2 multiplexing would defeat parallel downloading), and
+/// attaches an optional Bearer token.
+///
+/// # Errors
+///
+/// Returns an error if the token contains characters invalid for an HTTP header
+/// value, or if the underlying client cannot be constructed.
 pub fn make_client(token: Option<&str>) -> Result<reqwest::Client, String> {
     let mut headers = reqwest::header::HeaderMap::new();
 
-    // Explicitly opt out of content encoding. Without gzip/brotli features
-    // reqwest won't advertise them, but this header guards against any future
-    // middleware re-enabling transparent decompression, which would corrupt
-    // binary file transfers and break Content-Range accounting.
+    // Guards against future middleware re-enabling transparent decompression,
+    // which would corrupt binary transfers and break Content-Range accounting.
     headers.insert(
         reqwest::header::ACCEPT_ENCODING,
         "identity".parse().unwrap(),
@@ -55,30 +49,25 @@ pub fn make_client(token: Option<&str>) -> Result<reqwest::Client, String> {
         .default_headers(headers)
         .pool_max_idle_per_host(MAX_PARALLEL_CHUNKS as usize)
         .tcp_keepalive(Duration::from_secs(60))
-        // No overall timeout: .timeout() covers the entire streaming body read.
-        // A 7GB model at 20MB/s takes ~350s — any wall-clock limit kills it.
-        // Stall resilience is handled by per-chunk stall timeout in transfer.rs.
+        // No `.timeout()`: a wall-clock limit would kill large transfers.
+        // Stall resilience is handled per-chunk in transfer.rs instead.
         .connect_timeout(Duration::from_secs(15))
-        // Force HTTP/1.1 so each chunk gets its own TCP connection.
-        // Cloudflare supports H2; if negotiated, all range requests would be
-        // multiplexed over one TCP stream, defeating parallel downloading.
         .http1_only()
         .build()
         .map_err(|e| e.to_string())
 }
 
-/// Probes the URL to resolve the final redirected URL, total file size,
-/// and whether the server supports byte-range requests.
+/// Resolves the final URL, total file size, and byte-range support for `url`.
 ///
-/// Strategy — HEAD first, Range GET fallback:
+/// Issues a `HEAD` request first; falls back to a single-byte range `GET`
+/// when `HEAD` returns no usable `Content-Length`. The range response carries
+/// an authoritative `Content-Range: bytes 0-0/<total>` header.
 ///
-///   1. HEAD: zero-body, fast. Sufficient when the CDN returns Content-Length.
-///      Cloudflare sometimes omits Content-Length on HEAD responses to
-///      redirected blob-storage targets, so we can't rely on it alone.
+/// # Errors
 ///
-///   2. Range GET (bytes=0-0): fired only when HEAD returns no usable size.
-///      A 206 response always carries `Content-Range: bytes 0-0/<total>`,
-///      which is the authoritative file size. Only one body byte is transferred.
+/// Returns an error if the server responds with a non-success status, the
+/// redirect target is not on an allowed host, or the reported size exceeds
+/// [`MAX_FILE_BYTES`].
 pub async fn probe(client: &reqwest::Client, url: &str) -> Result<(String, u64, bool), String> {
     // ── Step 1: HEAD ─────────────────────────────────────────────────────────
     let head = client
@@ -91,9 +80,6 @@ pub async fn probe(client: &reqwest::Client, url: &str) -> Result<(String, u64, 
         return Err(format!("Probe failed: HTTP {}", head.status()));
     }
 
-    // Validate the redirect destination is still on the allowed host.
-    // is_allowed_host() requires an exact match or a genuine subdomain —
-    // a plain ends_with check would accept any domain ending in "hf.co".
     let resolved = head.url().to_string();
     if let Some(host) = head.url().host_str() {
         if !is_allowed_host(host) {
@@ -101,7 +87,6 @@ pub async fn probe(client: &reqwest::Client, url: &str) -> Result<(String, u64, 
         }
     }
 
-    // Accept-Ranges: bytes — read from HEAD, authoritative regardless of path.
     let accepts_ranges = head
         .headers()
         .get("accept-ranges")
@@ -109,7 +94,6 @@ pub async fn probe(client: &reqwest::Client, url: &str) -> Result<(String, u64, 
         .map(|v| v.contains("bytes"))
         .unwrap_or(false);
 
-    // If HEAD gave us a non-zero Content-Length we're done — zero body cost.
     if let Some(total) = head.content_length().filter(|&n| n > 0) {
         if total > MAX_FILE_BYTES {
             return Err(format!("File too large: {} bytes exceeds {}-byte limit", total, MAX_FILE_BYTES));
@@ -118,7 +102,7 @@ pub async fn probe(client: &reqwest::Client, url: &str) -> Result<(String, u64, 
     }
 
     // ── Step 2: Range GET fallback ────────────────────────────────────────────
-    // Issue against the already-resolved URL so we don't re-follow the redirect.
+    // Issue against the resolved URL to avoid re-following the redirect.
     let range_resp = client
         .get(&resolved)
         .header("Range", "bytes=0-0")
@@ -127,8 +111,8 @@ pub async fn probe(client: &reqwest::Client, url: &str) -> Result<(String, u64, 
         .map_err(|e| e.to_string())?;
 
     if range_resp.status().as_u16() != 206 {
-        // Range not supported — return total=0 so commands.rs falls back to
-        // download_stream, which doesn't need a known size.
+        // Range not supported — return total=0 so the caller falls back to
+        // `download_stream`, which does not require a known size.
         return Ok((resolved, 0, false));
     }
 
@@ -136,7 +120,6 @@ pub async fn probe(client: &reqwest::Client, url: &str) -> Result<(String, u64, 
         .headers()
         .get("content-range")
         .and_then(|v| v.to_str().ok())
-        // Format: "bytes 0-0/<total>"
         .and_then(|s| s.split('/').last())
         .and_then(|s| s.parse::<u64>().ok())
         .unwrap_or(0);
@@ -145,12 +128,13 @@ pub async fn probe(client: &reqwest::Client, url: &str) -> Result<(String, u64, 
         return Err(format!("File too large: {} bytes exceeds {}-byte limit", total, MAX_FILE_BYTES));
     }
 
-    // A 206 response is authoritative proof that ranges are supported,
-    // even if the HEAD response didn't include Accept-Ranges: bytes.
+    // A 206 response is authoritative proof of range support even when HEAD
+    // omitted `Accept-Ranges: bytes`.
     Ok((resolved, total, true))
 }
 
-/// Scales parallel chunk count based on an optimal target size.
+/// Returns the number of parallel chunks for a file of `total` bytes,
+/// clamped to `[1, `[`MAX_PARALLEL_CHUNKS`]`]`.
 pub fn choose_chunks(total: u64) -> u64 {
     if total == 0 {
         return 1;

@@ -1,3 +1,5 @@
+//! Shared state types and event payload structs for the download subsystem.
+
 use std::{
     collections::VecDeque,
     sync::{
@@ -10,17 +12,16 @@ use std::{
 use serde::Serialize;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
-// ── Shared cancel flag ────────────────────────────────────────────────────────
+// ── Download state ────────────────────────────────────────────────────────────
 
+/// Tauri-managed state that enforces a single concurrent download and exposes
+/// a cancellation flag.
 pub struct DownloadState {
     pub cancel: Arc<AtomicBool>,
-    /// Limits concurrent downloads to exactly one at a time.
-    ///
-    /// A Semaphore with 1 permit is the simplest correct primitive here.
-    /// try_acquire_owned() is non-blocking: success means this caller owns the
-    /// slot; TryAcquireError means one is already running. The returned
-    /// OwnedSemaphorePermit releases the slot automatically when dropped —
-    /// whether the download returns normally, errors, or panics.
+    // One-permit semaphore used as a mutex-like download slot.
+    // `try_acquire_owned` is non-blocking: success grants the slot;
+    // `TryAcquireError` means one is already running. The permit releases
+    // the slot automatically on drop, even on panic.
     active: Arc<Semaphore>,
 }
 
@@ -34,12 +35,16 @@ impl Default for DownloadState {
 }
 
 impl DownloadState {
-    /// Acquires the download slot, resets the cancel flag, and returns both
-    /// the cancel Arc and a permit that must be held for the download's
-    /// lifetime. Returns an error immediately if a download is already running.
+    /// Acquires the download slot and resets the cancellation flag.
     ///
-    /// The reset happens only after acquiring the slot so a concurrent start()
-    /// cannot clear the cancel flag of a download still in flight.
+    /// The returned permit **must be held** for the entire download lifetime;
+    /// dropping it releases the slot. The flag is reset only after acquiring
+    /// the slot to prevent a racing `start()` call from clearing the flag of
+    /// an in-flight download.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error string if a download is already in progress.
     pub fn start(&self) -> Result<(Arc<AtomicBool>, OwnedSemaphorePermit), String> {
         let permit = Arc::clone(&self.active)
             .try_acquire_owned()
@@ -48,45 +53,50 @@ impl DownloadState {
         Ok((Arc::clone(&self.cancel), permit))
     }
 
-    /// Signals any in-progress download to stop.
+    /// Signals any in-progress download to stop at its next cancellation check.
     pub fn request_cancel(&self) {
         self.cancel.store(true, Ordering::SeqCst);
     }
 
+    /// Returns `true` if cancellation has been requested.
     pub fn is_cancelled(&self) -> bool {
         self.cancel.load(Ordering::SeqCst)
     }
 }
 
-// ── Rolling-window speed tracker ─────────────────────────────────────────────
-//
-// Keeps a sliding window of (timestamp, bytes) samples. Each tick we record
-// the current byte count, prune samples older than WINDOW_SECS, then compute
-// speed as Δbytes / Δtime over the surviving window. This gives a responsive
-// but stable estimate — instantaneous reads are too jittery, a full-download
-// average is too slow to reflect CDN speed changes.
+// ── Speed tracker ─────────────────────────────────────────────────────────────
 
+// Instantaneous reads are too jittery; a full-download average is too slow to
+// reflect CDN speed changes. Four seconds balances responsiveness and stability.
 const SPEED_WINDOW_SECS: f64 = 4.0;
 
+/// Estimates download speed from a sliding window of cumulative byte samples.
+///
+/// Each [`record`](SpeedTracker::record) call appends a `(timestamp, bytes)`
+/// sample, prunes entries older than `SPEED_WINDOW_SECS`, then computes speed
+/// as `Δbytes / Δtime` over the surviving window.
 pub struct SpeedTracker {
-    /// Ring of (Instant, cumulative_bytes) samples, oldest first.
+    /// `(timestamp, cumulative_bytes)` samples, oldest first.
     samples: VecDeque<(Instant, u64)>,
 }
 
 impl SpeedTracker {
+    /// Creates a new tracker with pre-allocated sample storage.
     pub fn new() -> Self {
         Self {
             samples: VecDeque::with_capacity(32),
         }
     }
 
-    /// Record a new sample and return the current speed in bytes/sec.
-    /// Returns `None` until at least two samples span a non-zero time window.
+    /// Records `bytes` (cumulative total downloaded so far) and returns the
+    /// current speed in bytes per second.
+    ///
+    /// Returns `None` until at least two samples span a window wider than
+    /// 50 ms, to avoid noisy estimates on startup.
     pub fn record(&mut self, bytes: u64) -> Option<f64> {
         let now = Instant::now();
         self.samples.push_back((now, bytes));
 
-        // Prune samples that have fallen outside the rolling window.
         while self
             .samples
             .front()
@@ -99,7 +109,6 @@ impl SpeedTracker {
         let (oldest_t, oldest_bytes) = *self.samples.front()?;
         let elapsed = now.duration_since(oldest_t).as_secs_f64();
         if elapsed < 0.05 {
-            // Window too narrow for a stable estimate — skip this tick.
             return None;
         }
 
@@ -110,17 +119,20 @@ impl SpeedTracker {
 
 // ── Event payloads ────────────────────────────────────────────────────────────
 
+/// Payload emitted as `download-progress` on each progress tick.
 #[derive(Serialize, Clone)]
 pub struct DownloadProgress {
     pub model_id: String,
     pub filename: String,
+    /// Bytes written to disk so far.
     pub downloaded: u64,
+    /// Total expected bytes, or `0` if unknown (streaming fallback).
     pub total: u64,
+    /// Completion percentage in `[0.0, 100.0]`, or `0.0` when `total` is unknown.
     pub percent: f64,
     /// Rolling-window bytes/sec estimate. `None` during the first few ticks
-    /// while the window fills up, or when `total` is unknown.
+    /// while the window fills, or when `total` is unknown.
     pub speed_bps: Option<f64>,
-    /// Estimated seconds remaining based on current speed. `None` when speed
-    /// or total is unknown.
+    /// Estimated seconds remaining. `None` when speed or `total` is unknown.
     pub eta_secs: Option<f64>,
 }
