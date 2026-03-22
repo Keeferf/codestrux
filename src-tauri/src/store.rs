@@ -1,67 +1,14 @@
-//! Persistent storage for the HuggingFace token and downloaded model registry.
+//! Persistent storage for the downloaded model registry.
 //!
 //! All reads and writes go through [`tauri_plugin_store`], which encrypts the
-//! JSON file on disk. The token is never returned to the frontend after being
-//! saved — callers can only query its presence via [`has_token`].
+//! JSON file on disk.
 
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 use tauri_plugin_store::StoreExt;
 
 const STORE_FILE: &str = "codestrux.json";
-const TOKEN_KEY: &str = "hf_token";
 const MODELS_KEY: &str = "downloaded_models";
-
-// ── Token management ──────────────────────────────────────────────────────────
-
-/// Persists the HuggingFace token to the encrypted on-disk store.
-///
-/// # Errors
-///
-/// Returns an error if the store cannot be opened or flushed to disk.
-#[tauri::command]
-pub fn save_token(app: AppHandle, token: String) -> Result<(), String> {
-    let store = app.store(STORE_FILE).map_err(|e| e.to_string())?;
-    store.set(TOKEN_KEY, serde_json::Value::String(token));
-    store.save().map_err(|e| e.to_string())
-}
-
-/// Returns `true` if a non-empty token is stored.
-///
-/// The frontend uses this to decide whether to show the "add token" prompt;
-/// it never receives the token value itself.
-#[tauri::command]
-pub fn has_token(app: AppHandle) -> bool {
-    app.store(STORE_FILE)
-        .ok()
-        .and_then(|s| s.get(TOKEN_KEY))
-        .and_then(|v| v.as_str().map(|s| !s.is_empty()))
-        .unwrap_or(false)
-}
-
-/// Deletes the stored token.
-///
-/// # Errors
-///
-/// Returns an error if the store cannot be opened or flushed to disk.
-#[tauri::command]
-pub fn delete_token(app: AppHandle) -> Result<(), String> {
-    let store = app.store(STORE_FILE).map_err(|e| e.to_string())?;
-    store.delete(TOKEN_KEY);
-    store.save().map_err(|e| e.to_string())
-}
-
-/// Returns the stored token for internal use.
-///
-/// Not exposed as a Tauri command — the token must never be sent back to the
-/// frontend.
-pub fn read_token(app: &AppHandle) -> Option<String> {
-    app.store(STORE_FILE)
-        .ok()
-        .and_then(|s| s.get(TOKEN_KEY))
-        .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .filter(|s| !s.is_empty())
-}
 
 // ── Downloaded model registry ─────────────────────────────────────────────────
 

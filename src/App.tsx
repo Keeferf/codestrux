@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import type { ChatMessage, CreativityKey, Session } from "./types";
 import { Header, Sidebar } from "./components/layout";
 import { ChatArea } from "./components/chat";
 import { SettingsPanel } from "./components/settings";
-import { startChat, stopChat } from "./lib/Chat";
 import {
   getDownloadedModels,
   cancelDownload,
@@ -17,8 +18,14 @@ import {
 } from "./lib/Download";
 import "./index.css";
 
-function createSession(model: string, title: string = "New session"): Session {
-  return { id: Date.now(), title, model: model || "none", time: "now" };
+interface LoadedModelInfo {
+  model_id: string;
+  filename: string;
+  backend: string;
+}
+
+function createSession(title: string = "New session"): Session {
+  return { id: Date.now(), title, model: "local", time: "now" };
 }
 
 export default function App() {
@@ -26,12 +33,14 @@ export default function App() {
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
-  const [model, setModel] = useState("");
   const [creativity, setCreativity] = useState<CreativityKey>("balanced");
   const [showSettings, setShowSettings] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // ── Loaded local model ────────────────────────────────────────────────────
+  const [loadedModel, setLoadedModel] = useState<LoadedModelInfo | null>(null);
 
   // ── Download state ────────────────────────────────────────────────────────
   const [downloadedModels, setDownloadedModels] = useState<DownloadedModel[]>(
@@ -41,20 +50,40 @@ export default function App() {
     null,
   );
 
-  const unlistenRef = useRef<UnlistenFn | null>(null);
+  const chatUnlistensRef = useRef<UnlistenFn[]>([]);
   const dlUnlistenRef = useRef<UnlistenFn[]>([]);
 
   // ── Init ──────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!isReady && sessions.length === 0) {
-      const defaultSession = createSession("");
+      const defaultSession = createSession();
       setSessions([defaultSession]);
       setActiveSessionId(defaultSession.id);
       setIsReady(true);
     }
     refreshDownloadedModels();
+
+    // Sync whatever model is already loaded (e.g. after a hot reload).
+    invoke<LoadedModelInfo | null>("get_loaded_model")
+      .then((info) => setLoadedModel(info ?? null))
+      .catch(() => {});
   }, [isReady, sessions.length]);
+
+  // ── Track loaded model via events ─────────────────────────────────────────
+
+  useEffect(() => {
+    const unlistens: Promise<UnlistenFn>[] = [
+      listen<LoadedModelInfo>("model-loaded", (e) => setLoadedModel(e.payload)),
+      listen("model-error", () => setLoadedModel(null)),
+      // Cleared when the user explicitly unloads via SettingsPanel.
+      listen("unload-model", () => setLoadedModel(null)),
+    ];
+
+    return () => {
+      unlistens.forEach((p) => p.then((fn) => fn()));
+    };
+  }, []);
 
   // ── Download event listeners ──────────────────────────────────────────────
 
@@ -107,7 +136,7 @@ export default function App() {
 
   const handleNewSession = () => {
     resetSession();
-    const s = createSession(model);
+    const s = createSession();
     setSessions((prev) => [s, ...prev]);
     setActiveSessionId(s.id);
   };
@@ -121,7 +150,7 @@ export default function App() {
     setSessions((prev) => {
       const remaining = prev.filter((s) => s.id !== id);
       if (remaining.length === 0) {
-        const replacement = createSession(model);
+        const replacement = createSession();
         setActiveSessionId(replacement.id);
         setMessages([]);
         return [replacement];
@@ -139,8 +168,12 @@ export default function App() {
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
-    if (!model) {
-      setError("Please select a model first.");
+
+    // Guard: a model must be loaded in llama-server before chatting.
+    if (!loadedModel) {
+      setError(
+        "Please load a model first — open Settings and click ▶ on a downloaded model.",
+      );
       return;
     }
 
@@ -169,31 +202,49 @@ export default function App() {
         content: m.content,
       }));
 
-    unlistenRef.current = await startChat(model, history, {
-      onToken: (chunk) => {
+    // Clean up any previous listeners before registering new ones.
+    chatUnlistensRef.current.forEach((fn) => fn());
+    chatUnlistensRef.current = [];
+
+    const unlistens = await Promise.all([
+      listen<string>("local-chat-token", (e) => {
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === assistantId ? { ...m, content: m.content + chunk } : m,
+            m.id === assistantId ? { ...m, content: m.content + e.payload } : m,
           ),
         );
-      },
-      onDone: () => {
+      }),
+      listen("local-chat-done", () => {
         setIsLoading(false);
-        unlistenRef.current = null;
-      },
-      onError: (msg) => {
-        setError(msg);
+        chatUnlistensRef.current.forEach((fn) => fn());
+        chatUnlistensRef.current = [];
+      }),
+      listen<string>("local-chat-error", (e) => {
+        setError(e.payload);
         setIsLoading(false);
         setMessages((prev) => prev.filter((m) => m.id !== assistantId));
-        unlistenRef.current = null;
-      },
-    });
+        chatUnlistensRef.current.forEach((fn) => fn());
+        chatUnlistensRef.current = [];
+      }),
+    ]);
+
+    chatUnlistensRef.current = unlistens;
+
+    try {
+      await invoke("start_local_chat", { messages: history });
+    } catch (e) {
+      setError(typeof e === "string" ? e : "Failed to start chat.");
+      setIsLoading(false);
+      setMessages((prev) => prev.filter((m) => m.id !== assistantId));
+      chatUnlistensRef.current.forEach((fn) => fn());
+      chatUnlistensRef.current = [];
+    }
   };
 
   const handleStop = async () => {
-    await stopChat();
-    unlistenRef.current?.();
-    unlistenRef.current = null;
+    await invoke("stop_local_chat").catch(() => {});
+    chatUnlistensRef.current.forEach((fn) => fn());
+    chatUnlistensRef.current = [];
     setIsLoading(false);
   };
 
@@ -206,8 +257,8 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden overscroll-none bg-slate-grey-950 text-parchment-300">
       <Header
-        model={model}
-        onModelChange={setModel}
+        model={loadedModel?.model_id ?? ""}
+        onModelChange={() => {}}
         downloadedModelIds={downloadedModelIds}
         onDownloadStart={() => {}}
       />

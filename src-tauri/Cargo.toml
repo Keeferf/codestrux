@@ -13,14 +13,14 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2.5.6", features = [] }
 
 [dependencies]
-tauri          = { version = "2.10.3", features = [] }
+tauri               = { version = "2.10.3", features = [] }
 tauri-plugin-opener = "2.5.3"
 tauri-plugin-store  = "2.4.2"
 
-serde          = { version = "1.0.228", features = ["derive"] }
-serde_json     = "1.0.149"
-sysinfo        = "0.38.4"
-wgpu           = { version = "29.0.0", features = [] }
+serde      = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+sysinfo    = "0.38.4"
+wgpu       = { version = "29.0.0", features = [] }
 
 # Parallel chunked model file downloads from HuggingFace Hub.
 # http2 is intentionally absent — the download client forces HTTP/1.1
@@ -31,15 +31,16 @@ reqwest = { version = "0.13.2", default-features = false, features = [
 ] }
 # bytes: zero-copy frame passing between async network receiver and
 # blocking disk writer via per-chunk mpsc channels.
-bytes          = "1.11.1"
-futures-util   = "0.3.32"
-tokio          = { version = "1.50.0", features = [
-  "sync",         # mpsc channels for async↔blocking frame passing
-  "fs",           # tokio::fs::File for pre-allocation only
-  "io-util",      # AsyncWriteExt / AsyncSeekExt (pre-allocation)
-  "macros",       # #[tokio::main]
+bytes        = "1.11.1"
+futures-util = "0.3.32"
+tokio        = { version = "1.50.0", features = [
+  "sync",            # mpsc channels for async↔blocking frame passing
+  "fs",              # tokio::fs::File for pre-allocation only
+  "io-util",         # AsyncWriteExt / AsyncSeekExt (pre-allocation)
+  "macros",          # #[tokio::main]
   "rt-multi-thread",
-  "time",         # tokio::time::interval / sleep
+  "time",            # tokio::time::interval / sleep
+  "process",         # tokio::process::Command for llama-server subprocess
 ] }
 
 [target.'cfg(windows)'.dependencies]

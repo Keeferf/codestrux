@@ -5,7 +5,7 @@ use std::sync::{
 
 use tauri::{AppHandle, Emitter, Manager, State};
 
-use crate::store::{read_token, save_downloaded_model, StoredModel};
+use crate::store::{save_downloaded_model, StoredModel};
 
 use super::{
     client::{choose_chunks, make_client, probe},
@@ -14,7 +14,7 @@ use super::{
     validate::{sanitise_filename, sanitise_model_id},
 };
 
-/// Downloads a model file from HuggingFace and emits progress events.
+/// Downloads a public model file from HuggingFace and emits progress events.
 ///
 /// Acquires the single download slot, probes the URL for file size and
 /// range-request support, then dispatches to [`download_parallel`] or
@@ -47,8 +47,8 @@ pub async fn start_download(
         model_id, filename
     );
 
-    let token = read_token(&app);
-    let client = Arc::new(make_client(token.as_deref())?);
+    // No token — only public models are supported.
+    let client = Arc::new(make_client(None)?);
 
     let (resolved_url, total, accepts_ranges) = probe(&client, &url).await.map_err(|e| {
         let _ = app.emit("download-error", &e);
