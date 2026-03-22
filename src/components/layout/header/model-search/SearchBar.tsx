@@ -40,8 +40,8 @@ export function SearchBar({
           size={11}
           className="text-slate-grey-600 group-hover:text-indigo-smoke-400 transition-colors shrink-0"
         />
-        <span className="font-mono text-[11px] text-slate-grey-600 group-hover:text-slate-grey-400 transition-colors">
-          search models…
+        <span className="font-mono text-[11px] leading-none translate-y-px text-slate-grey-600 group-hover:text-slate-grey-400 transition-colors">
+          Download a model…
         </span>
       </button>
     );
