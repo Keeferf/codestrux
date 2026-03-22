@@ -8,12 +8,7 @@ interface HeaderProps {
   onDownloadStart: (modelId: string, filename: string) => void;
 }
 
-export function Header({
-  model,
-  onModelChange,
-  downloadedModelIds,
-  onDownloadStart,
-}: HeaderProps) {
+export function Header({ downloadedModelIds, onDownloadStart }: HeaderProps) {
   return (
     <header
       className="h-9 shrink-0 flex items-center justify-between bg-slate-grey-900 border-b border-slate-grey-800"

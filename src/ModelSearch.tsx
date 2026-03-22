@@ -199,7 +199,7 @@ export function ModelSearch({
   return (
     <div
       ref={containerRef}
-      className="relative flex-1 max-w-[480px]"
+      className="relative flex-1 max-w-120"
       style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
     >
       {/* ── Closed trigger bar ── */}
@@ -210,13 +210,13 @@ export function ModelSearch({
         >
           <Download
             size={11}
-            className="text-slate-grey-600 group-hover:text-indigo-smoke-500 flex-shrink-0 transition-colors"
+            className="text-slate-grey-600 group-hover:text-indigo-smoke-500 shrink-0 transition-colors"
           />
           <span className="font-mono text-xs flex-1 text-left truncate text-slate-grey-500 group-hover:text-parchment-400 transition-colors">
             Download a model…
           </span>
           {downloadedModelIds.length > 0 && (
-            <span className="font-mono text-[10px] text-moss-green-600 flex-shrink-0">
+            <span className="font-mono text-[10px] text-moss-green-600 shrink-0">
               {downloadedModelIds.length} downloaded
             </span>
           )}
@@ -229,7 +229,7 @@ export function ModelSearch({
             {expandedModel ? (
               <button
                 onClick={backToSearch}
-                className="text-indigo-smoke-400 hover:text-parchment-300 transition-colors flex-shrink-0"
+                className="text-indigo-smoke-400 hover:text-parchment-300 transition-colors shrink-0"
                 title="Back to search"
               >
                 <ChevronLeft size={12} />
@@ -237,13 +237,10 @@ export function ModelSearch({
             ) : isSearching ? (
               <Loader2
                 size={12}
-                className="text-indigo-smoke-400 animate-spin flex-shrink-0"
+                className="text-indigo-smoke-400 animate-spin shrink-0"
               />
             ) : (
-              <Search
-                size={12}
-                className="text-indigo-smoke-400 flex-shrink-0"
-              />
+              <Search size={12} className="text-indigo-smoke-400 shrink-0" />
             )}
 
             {expandedModel ? (
@@ -279,7 +276,7 @@ export function ModelSearch({
 
             <button
               onClick={close}
-              className="text-slate-grey-700 hover:text-slate-grey-400 transition-colors flex-shrink-0"
+              className="text-slate-grey-700 hover:text-slate-grey-400 transition-colors shrink-0"
             >
               <X size={11} />
             </button>
@@ -309,18 +306,18 @@ export function ModelSearch({
                       {alreadyDownloaded && (
                         <CheckCircle2
                           size={11}
-                          className="text-moss-green-500 flex-shrink-0"
+                          className="text-moss-green-500 shrink-0"
                         />
                       )}
                       <span className="font-mono text-xs text-parchment-200 truncate flex-1 min-w-0">
                         {m.id}
                       </span>
-                      <span className="flex-shrink-0 font-mono text-[10px] text-slate-grey-600 tabular-nums w-12 text-right">
+                      <span className="shrink-0 font-mono text-[10px] text-slate-grey-600 tabular-nums w-12 text-right">
                         {formatDownloads(m.downloads)}↓
                       </span>
                       <ChevronLeft
                         size={10}
-                        className="text-slate-grey-700 rotate-180 flex-shrink-0"
+                        className="text-slate-grey-700 rotate-180 shrink-0"
                       />
                     </button>
                   );
@@ -386,7 +383,7 @@ export function ModelSearch({
                           {f.rfilename}
                         </span>
                         {f.size != null && (
-                          <span className="font-mono text-[10px] text-slate-grey-600 flex-shrink-0 tabular-nums">
+                          <span className="font-mono text-[10px] text-slate-grey-600 shrink-0 tabular-nums">
                             {formatBytes(f.size)}
                           </span>
                         )}
@@ -395,7 +392,7 @@ export function ModelSearch({
                             handleDownload(expandedModel!.id, f.rfilename)
                           }
                           disabled={isDownloading}
-                          className={`flex-shrink-0 flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono transition-all border ${
+                          className={`shrink-0 flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono transition-all border ${
                             isDone
                               ? "border-moss-green-800 text-moss-green-600 bg-moss-green-950/40 cursor-default"
                               : isDownloading

@@ -8,7 +8,7 @@ export function WindowControls() {
 
   return (
     <div
-      className="flex items-center self-stretch w-[160px] justify-end"
+      className="flex items-center self-stretch w-40 justify-end"
       style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
     >
       <button

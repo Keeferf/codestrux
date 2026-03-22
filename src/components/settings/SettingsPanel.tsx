@@ -169,7 +169,7 @@ export function SettingsPanel({
               </span>
               <button
                 onClick={onCancelDownload}
-                className="flex-shrink-0 text-slate-grey-600 hover:text-brick-red-400 transition-colors"
+                className="shrink-0 text-slate-grey-600 hover:text-brick-red-400 transition-colors"
                 title="Cancel download"
               >
                 <X size={11} />
@@ -210,7 +210,7 @@ export function SettingsPanel({
           <div className="rounded-md bg-slate-grey-950 border border-indigo-smoke-800/50 px-3 py-2.5 flex items-center gap-2">
             <Loader2
               size={11}
-              className="text-indigo-smoke-400 animate-spin flex-shrink-0"
+              className="text-indigo-smoke-400 animate-spin shrink-0"
             />
             <span className="font-mono text-[10px] text-indigo-smoke-400">
               {loadingState.backend
@@ -229,7 +229,7 @@ export function SettingsPanel({
               </span>
               <button
                 onClick={handleUnloadModel}
-                className="flex-shrink-0 mt-0.5 text-slate-grey-600 hover:text-brick-red-400 transition-colors"
+                className="shrink-0 mt-0.5 text-slate-grey-600 hover:text-brick-red-400 transition-colors"
                 title="Unload model"
               >
                 <Square size={11} />
@@ -281,7 +281,7 @@ export function SettingsPanel({
                     <span className="font-mono text-xs text-parchment-200 break-all leading-tight flex-1">
                       {m.filename}
                     </span>
-                    <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">
+                    <div className="flex items-center gap-1 shrink-0 mt-0.5">
                       {/* Load button — hidden when this model is loaded or another is loading */}
                       {!active && (
                         <button
@@ -315,7 +315,7 @@ export function SettingsPanel({
                   <div className="flex items-center gap-1.5">
                     <HardDrive
                       size={9}
-                      className="text-slate-grey-600 flex-shrink-0"
+                      className="text-slate-grey-600 shrink-0"
                     />
                     <span className="font-mono text-[10px] text-slate-grey-500 tabular-nums">
                       {formatBytes(m.size)}
