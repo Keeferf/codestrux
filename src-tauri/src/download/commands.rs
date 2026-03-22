@@ -5,7 +5,7 @@ use std::sync::{
 
 use tauri::{AppHandle, Emitter, Manager, State};
 
-use crate::store::{save_downloaded_model, StoredModel};
+use crate::model_storage::{save_downloaded_model, StoredModel};
 
 use super::{
     client::{choose_chunks, make_client, probe},
@@ -14,17 +14,6 @@ use super::{
     validate::{sanitise_filename, sanitise_model_id},
 };
 
-/// Downloads a public model file from HuggingFace and emits progress events.
-///
-/// Acquires the single download slot, probes the URL for file size and
-/// range-request support, then dispatches to [`download_parallel`] or
-/// [`download_stream`]. Partial files are removed on failure or cancellation.
-///
-/// # Errors
-///
-/// Returns an error string if the filename or model ID are invalid, a download
-/// is already in progress, the network request fails, or the received byte
-/// count does not match the expected total.
 #[tauri::command]
 pub async fn start_download(
     app: AppHandle,
@@ -39,8 +28,6 @@ pub async fn start_download(
         let _ = app.emit("download-error", &e);
         e
     })?;
-    // `_permit` is held for the lifetime of this function; dropping it on
-    // return releases the slot whether the download succeeds, errors, or panics.
 
     let url = format!(
         "https://huggingface.co/{}/resolve/main/{}",

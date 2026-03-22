@@ -1,18 +1,8 @@
 //! Local GGUF inference via a bundled llama-server subprocess.
 //!
-//! # Binary selection (Windows)
-//!
-//! Two binaries are bundled:
-//!
-//! | Binary                      | Backend | Works on               |
-//! |-----------------------------|---------|------------------------|
-//! | `llama-server-vulkan.exe`   | Vulkan  | Nvidia, AMD, Intel Arc |
-//! | `llama-server-cpu.exe`      | CPU     | Every x64 machine      |
-//!
 //! [`resolve_candidates`] returns both binaries in preference order.
 //! [`load_local_model`] attempts to start the Vulkan binary first; if its
-//! health check times out (driver absent, GPU too old, etc.) the process is
-//! killed and the CPU binary is tried automatically. The binary that succeeded
+//! health check times out the process is killed and the CPU binary is tried automatically. The binary that succeeded
 //! is cached in [`LocalChatState::active_bin`] so subsequent model loads on
 //! the same machine skip the Vulkan probe entirely.
 //!
@@ -40,7 +30,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::process::Child;
 
-use crate::store::get_downloaded_models_internal;
+use crate::model_storage::get_downloaded_models_internal;
 
 // ── Message type ──────────────────────────────────────────────────────────────
 
@@ -62,7 +52,7 @@ const SERVER_PORT: u16 = 28765;
 
 /// Health-check timeout for the Vulkan binary. Shorter than CPU because if
 /// Vulkan isn't going to work it usually fails quickly (driver error at init).
-const VULKAN_HEALTH_TIMEOUT: Duration = Duration::from_secs(30);
+const VULKAN_HEALTH_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Health-check timeout for the CPU binary. Large models on a slow machine
 /// can take a while to mmap into memory.

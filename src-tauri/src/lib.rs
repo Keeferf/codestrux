@@ -6,7 +6,7 @@
 mod download;
 mod hardware;
 mod local_chat;
-mod store;
+mod model_storage;
 
 use download::DownloadState;
 use local_chat::LocalChatState;
@@ -27,8 +27,8 @@ pub fn run() {
             // hardware
             hardware::get_hardware_info,
             // downloaded model registry
-            store::get_downloaded_models,
-            store::delete_downloaded_model,
+            model_storage::get_downloaded_models,
+            model_storage::delete_downloaded_model,
             // model download
             download::commands::start_download,
             download::commands::cancel_download,
