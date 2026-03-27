@@ -8,22 +8,23 @@ mod cpu;
 mod memory;
 mod gpu;
 mod types;
-
 pub use types::HardwareInfo;
 
-/// Returns a snapshot of the host CPU, memory, and best available GPU.
-///
-/// GPU selection prefers discrete over integrated adapters; among equal types
-/// the adapter with the most VRAM wins, so a dedicated laptop GPU beats the
-/// iGPU. CPU and software-only adapters are excluded entirely.
+/// Gets comprehensive hardware information including CPU, memory, and GPU details.
 #[tauri::command]
 pub async fn get_hardware_info() -> HardwareInfo {
-    let mut sys = sysinfo::System::new_all();
+    use sysinfo::System;
+    
+    let mut sys = System::new_all();
     sys.refresh_all();
-
+    
+    let cpu_info = cpu::get_cpu_info(&sys);
+    let memory_info = memory::get_memory_info(&sys);
+    let gpu_info = gpu::get_best_gpu().await;
+    
     HardwareInfo {
-        cpu: cpu::get_cpu_info(&sys),
-        memory: memory::get_memory_info(&sys),
-        gpu: gpu::get_best_gpu().await,
+        cpu: cpu_info,
+        memory: memory_info,
+        gpu: gpu_info,
     }
 }
