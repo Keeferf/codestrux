@@ -22,6 +22,8 @@ serde_json = "1.0.149"
 sysinfo    = "0.38.4"
 wgpu       = { version = "29.0.1", features = [] }
 
+rusqlite = { version = "0.39.0", features = ["bundled"] }
+
 # Parallel chunked model file downloads from HuggingFace Hub.
 # http2 is intentionally absent — the download client forces HTTP/1.1
 # so each chunk gets its own TCP connection rather than being multiplexed.
