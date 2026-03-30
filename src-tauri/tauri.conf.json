@@ -41,7 +41,9 @@
     },
     "windows": {
       "nsis": {
-        "installerIcon": "icons/icon.ico"
+        "installerIcon": "icons/icon.ico",
+        "headerImage": null,
+        "sidebarImage": null
       },
       "wix": {
         "bannerPath": "icons/icon.ico"
