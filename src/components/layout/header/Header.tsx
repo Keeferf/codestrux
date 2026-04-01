@@ -19,7 +19,7 @@ export function Header({ downloadedModelIds, onDownloadStart }: HeaderProps) {
         className="flex items-center gap-2.5 pl-3 w-40"
         style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
       >
-        <img src="/logo.png" alt="CodeStrux" className="w-5.5 h-5.5" />
+        <img src="/icon.svg" alt="CodeStrux" className="w-5.5 h-5.5" />
         <span className="font-display text-sm font-semibold text-parchment-200 tracking-wide">
           CodeStrux
         </span>

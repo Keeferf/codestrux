@@ -191,9 +191,7 @@ export default function App() {
 
   // ── Session helpers ───────────────────────────────────────────────────────
 
-  const activeSession = sessions.find((s) => s.id === activeSessionId);
-  if (!activeSession)
-    return <div className="bg-slate-grey-950 h-screen w-screen" />;
+  const activeSession = sessions.find((s) => s.id === activeSessionId) ?? null;
 
   const resetSession = () => {
     handleStop();
@@ -233,23 +231,24 @@ export default function App() {
       sessionDbId.current.delete(id);
     }
 
-    setSessions((prev) => {
-      const remaining = prev.filter((s) => s.id !== id);
-      if (remaining.length === 0) {
-        const tempId = --tempIdCounter.current;
-        const replacement: Session = {
-          id: tempId,
-          title: "New session",
-          model: "local",
-          time: "now",
-        };
-        setActiveSessionId(replacement.id);
-        setMessages([]);
-        activeConvId.current = null;
-        return [replacement];
-      }
+    const remaining = sessions.filter((s) => s.id !== id);
+
+    if (remaining.length === 0) {
+      const tempId = --tempIdCounter.current;
+      const replacement: Session = {
+        id: tempId,
+        title: "New session",
+        model: "local",
+        time: "now",
+      };
+      setSessions([replacement]);
+      setActiveSessionId(tempId);
+      setMessages([]);
+      activeConvId.current = null;
+    } else {
+      setSessions(remaining);
       if (activeSessionId === id) {
-        const idx = prev.findIndex((s) => s.id === id);
+        const idx = sessions.findIndex((s) => s.id === id);
         const next = remaining[Math.min(idx, remaining.length - 1)];
         setActiveSessionId(next.id);
         setMessages([]);
@@ -257,8 +256,7 @@ export default function App() {
         activeConvId.current = nextDbId;
         if (nextDbId) loadMessagesForConv(nextDbId);
       }
-      return remaining;
-    });
+    }
   };
 
   // ── Chat handlers ─────────────────────────────────────────────────────────
@@ -427,7 +425,9 @@ export default function App() {
     ...new Set(downloadedModels.map((m) => m.model_id)),
   ];
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  if (!activeSession) {
+    return <div className="bg-slate-grey-950 h-screen w-screen" />;
+  }
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden overscroll-none bg-slate-grey-950 text-parchment-300">
