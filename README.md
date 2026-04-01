@@ -64,51 +64,6 @@ CodeStrux is a native desktop AI chat application built with Tauri and React. It
 
 ---
 
-## Project Structure
-
-```
-codestrux/
-├── src/                              # React + TypeScript frontend
-│   ├── components/
-│   │   ├── chat/                     # ChatArea — message list, input bar, streaming
-│   │   ├── hardware/                 # Hardware info display
-│   │   ├── layout/                   # Header + Sidebar (session list, nav)
-│   │   ├── settings/                 # SettingsPanel — model management, creativity
-│   │   └── ui/                       # Shared primitive components
-│   ├── constants/
-│   │   └── creativity.ts             # Precise / Balanced / Creative temp presets
-│   ├── lib/
-│   │   └── Download.ts               # Download progress events + cancel helper
-│   ├── types/
-│   │   └── index.ts                  # ChatMessage, Session, CreativityKey types
-│   ├── App.tsx                       # Root — session state, chat handlers, event wiring
-│   └── index.css                     # Tailwind v4 theme tokens
-│
-└── src-tauri/                        # Rust / Tauri backend
-    ├── src/
-    │   ├── main.rs
-    │   ├── lib.rs                    # Tauri builder, plugin setup, command registration
-    │   ├── model_storage.rs          # Downloaded model registry (list + delete)
-    │   ├── hardware.rs               # GPU/CPU detection via sysinfo + wgpu
-    │   ├── chat/
-    │   │   ├── mod.rs
-    │   │   ├── commands.rs           # get/load/unload model; start/stop chat
-    │   │   ├── server.rs             # llama-server subprocess lifecycle
-    │   │   ├── state.rs              # LocalChatState (Arc<Mutex<…>>)
-    │   │   ├── types.rs              # Rust chat message types + serde
-    │   │   └── logging.rs            # llama-server stdout/stderr relay
-    │   └── download/
-    │       ├── mod.rs
-    │       ├── commands.rs           # start_download / cancel_download Tauri commands
-    │       ├── client.rs             # reqwest HTTP/1.1 chunked downloader
-    │       ├── transfer.rs           # Per-chunk mpsc channel → disk writer
-    │       ├── validate.rs           # File integrity checks
-    │       └── types.rs              # DownloadProgress + DownloadState
-    └── bin/                          # Bundled llama-server binaries (platform-specific)
-```
-
----
-
 ## Tauri Commands
 
 The frontend communicates with the Rust backend via Tauri's `invoke` API. All commands are async and return `Result<T, String>`.
