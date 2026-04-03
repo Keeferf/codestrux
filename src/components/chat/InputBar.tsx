@@ -1,4 +1,4 @@
-import { Send, Square } from "lucide-react";
+import { LuSend, LuSquare } from "react-icons/lu";
 
 interface InputBarProps {
   input: string;
@@ -43,7 +43,7 @@ export function InputBar({
             onClick={onStop}
             className="flex items-center gap-1.5 rounded-md px-3 py-2 font-display text-xs border transition-all duration-200 bg-brick-red-900/40 border-brick-red-800 text-brick-red-400 cursor-pointer hover:bg-brick-red-800/60 hover:border-brick-red-700"
           >
-            <Square size={11} fill="currentColor" />
+            <LuSquare size={11} fill="currentColor" />
             stop
           </button>
         ) : (
@@ -56,7 +56,7 @@ export function InputBar({
                 : "bg-transparent border-slate-grey-800 text-slate-grey-600 cursor-default"
             }`}
           >
-            <Send size={13} />
+            <LuSend size={13} />
             send
           </button>
         )}

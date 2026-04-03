@@ -1,12 +1,12 @@
 import { useState } from "react";
 import {
-  Plus,
-  Cpu,
-  X,
-  Settings,
-  PanelLeftClose,
-  PanelLeftOpen,
-} from "lucide-react";
+  LuPlus,
+  LuCpu,
+  LuX,
+  LuSettings,
+  LuPanelLeftClose,
+  LuPanelLeftOpen,
+} from "react-icons/lu";
 import type { Session } from "../../types";
 
 interface SidebarProps {
@@ -40,7 +40,7 @@ export function Sidebar({
           aria-label="Expand sidebar"
           title="Expand sidebar"
         >
-          <PanelLeftOpen size={15} />
+          <LuPanelLeftOpen size={15} />
         </button>
 
         {/* New session button */}
@@ -50,7 +50,7 @@ export function Sidebar({
           aria-label="Create new session"
           title="New session"
         >
-          <Plus size={15} />
+          <LuPlus size={15} />
         </button>
 
         {/* Spacer */}
@@ -67,7 +67,7 @@ export function Sidebar({
           aria-label="Settings"
           title="Settings"
         >
-          <Settings size={14} />
+          <LuSettings size={14} />
         </button>
       </aside>
     );
@@ -87,7 +87,7 @@ export function Sidebar({
               aria-label="Create new session"
               title="New session"
             >
-              <Plus size={14} />
+              <LuPlus size={14} />
             </button>
 
             {/* Collapse button */}
@@ -97,7 +97,7 @@ export function Sidebar({
               aria-label="Collapse sidebar"
               title="Collapse sidebar"
             >
-              <PanelLeftClose size={14} />
+              <LuPanelLeftClose size={14} />
             </button>
           </div>
         </div>
@@ -148,7 +148,7 @@ export function Sidebar({
                 className="opacity-0 group-hover:opacity-100 shrink-0 mr-1.5 p-1 rounded text-slate-grey-500 hover:text-brick-red-400 hover:bg-brick-red-950/40 transition-all duration-150 cursor-pointer"
                 aria-label="Delete session"
               >
-                <X size={11} />
+                <LuX size={11} />
               </button>
             </div>
           );
@@ -158,7 +158,7 @@ export function Sidebar({
       {/* Footer with session count and settings */}
       <div className="flex items-center justify-between px-3 py-2.5 border-t border-slate-grey-800">
         <div className="flex items-center gap-1.5 font-display text-[11px] text-slate-grey-500">
-          <Cpu size={12} />
+          <LuCpu size={12} />
           <span>
             {sessions.length} session{sessions.length !== 1 ? "s" : ""}
           </span>
@@ -166,15 +166,11 @@ export function Sidebar({
 
         <button
           onClick={onToggleSettings}
-          className={`flex items-center justify-center w-7 h-7 rounded-md transition-all duration-150 ${
-            showSettings
-              ? "bg-indigo-smoke-900/50 text-indigo-smoke-400"
-              : "text-slate-grey-500 hover:text-parchment-300 hover:bg-slate-grey-800"
-          }`}
+          className="flex items-center justify-center w-7 h-7 rounded-md cursor-pointer transition-all duration-150 text-slate-grey-500 hover:text-parchment-300 hover:bg-slate-grey-800"
           aria-label="Settings"
           title="Settings"
         >
-          <Settings size={14} />
+          <LuSettings size={14} />
         </button>
       </div>
     </aside>

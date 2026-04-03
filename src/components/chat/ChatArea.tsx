@@ -42,7 +42,7 @@ export function ChatArea({
       <MessageList messages={messages} isLoading={isLoading} />
 
       {error && (
-        <div className="shrink-0 mx-4.5 mb-2 px-3 py-2 rounded-md bg-brick-red-950/60 border border-brick-red-800 font-mono text-xs text-brick-red-400">
+        <div className="shrink-0 mx-4.5 mb-2 px-3 py-2 rounded-md bg-red-950/60 border border-red-900 font-mono text-xs text-red-400">
           {error}
         </div>
       )}
