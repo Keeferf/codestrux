@@ -1,15 +1,19 @@
 import type { ChatMessage, CreativityKey, Session } from "../../types";
 import { MessageList } from "./MessageList";
 import { InputBar } from "./InputBar";
+import { AttachedFile } from "./FileAttachment";
 
 interface ChatAreaProps {
   activeSession: Session;
   messages: ChatMessage[];
   input: string;
   creativity: CreativityKey;
+  attachedFiles: AttachedFile[];
   onInputChange: (value: string) => void;
   onSend: () => void | Promise<void>;
   onStop: () => void | Promise<void>;
+  onFilesAttach: (files: AttachedFile[]) => void;
+  onFileRemove: (fileId: string) => void;
   isLoading: boolean;
   error: string | null;
 }
@@ -18,13 +22,17 @@ export function ChatArea({
   activeSession,
   messages,
   input,
+  attachedFiles,
   onInputChange,
   onSend,
   onStop,
+  onFilesAttach,
+  onFileRemove,
   isLoading,
   error,
 }: ChatAreaProps) {
-  const canSend = input.trim().length > 0 && !isLoading;
+  const canSend =
+    (input.trim().length > 0 || attachedFiles.length > 0) && !isLoading;
   const nonSystemCount = messages.filter((m) => m.role !== "system").length;
 
   return (
@@ -51,9 +59,12 @@ export function ChatArea({
         input={input}
         canSend={canSend}
         isLoading={isLoading}
+        attachedFiles={attachedFiles}
         onInputChange={onInputChange}
         onSend={onSend}
         onStop={onStop}
+        onFilesAttach={onFilesAttach}
+        onFileRemove={onFileRemove}
       />
     </main>
   );
