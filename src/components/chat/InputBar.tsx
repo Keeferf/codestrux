@@ -39,13 +39,13 @@ export function InputBar({
   };
 
   return (
-    <div className="absolute bottom-0 left-0 right-0 flex justify-center px-4 pb-4 pointer-events-none">
-      <div className="pointer-events-auto w-full max-w-[90%] min-w-0 flex flex-col gap-0 mx-auto">
+    <div className="absolute bottom-0 left-0 right-0 flex justify-center px-6 pb-4 pointer-events-none">
+      <div className="pointer-events-auto w-full min-w-0 flex flex-col gap-0">
         {/* File attachment area */}
         <div
           className={`transition-all duration-200 overflow-hidden ${
             attachedFiles.length > 0
-              ? "max-h-96 opacity-100 bg-slate-grey-900/70 backdrop-blur-md border border-b-0 border-slate-grey-700/60 rounded-t-xl px-4 pt-3 pb-2"
+              ? "max-h-96 opacity-100 bg-slate-grey-900 border border-b-0 border-slate-grey-700 rounded-t-xl px-4 pt-3 pb-2"
               : "max-h-0 opacity-0 border-0 p-0"
           }`}
         >
@@ -60,7 +60,7 @@ export function InputBar({
 
         {/* Floating input pill */}
         <div
-          className={`flex gap-1.5 items-center bg-slate-grey-900/70 backdrop-blur-md border border-slate-grey-700/60 p-3 shadow-xl shadow-black/40 ${
+          className={`flex gap-1.5 items-center bg-slate-grey-900 border border-slate-grey-700 p-3 shadow-xl shadow-black/40 ${
             attachedFiles.length > 0
               ? "rounded-b-xl rounded-t-none"
               : "rounded-xl"
