@@ -15,7 +15,7 @@ export function MessageList({ messages, isLoading }: MessageListProps) {
   }, [messages]);
 
   return (
-    <div className="flex-1 overflow-y-auto pl-7.5 pr-6 pt-2.5 pb-32 flex flex-col [scrollbar-gutter:stable]">
+    <div className="flex-1 overflow-y-auto px-32 py-2.5 flex flex-col">
       {messages.length === 0 ? (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">

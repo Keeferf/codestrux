@@ -27,7 +27,7 @@ export function Message({ message }: MessageProps) {
     <div
       className={`flex gap-3 py-3.5 items-start ${isUser ? "flex-row-reverse" : "flex-row"}`}
     >
-      <div className="max-w-[76%] min-w-0">
+      <div className="min-w-0 flex-1">
         <div
           className={`px-3.75 py-3 font-body text-sm leading-[1.7] text-parchment-200 ${
             isUser
