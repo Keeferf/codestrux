@@ -33,7 +33,7 @@ export function MessageList({
   return (
     <div
       ref={containerRef}
-      className="flex-1 overflow-y-auto px-40 py-2.5 flex flex-col"
+      className="flex-1 overflow-y-auto px-40 pt-2.5 pb-24 flex flex-col"
       style={{ scrollbarGutter: "stable" }}
     >
       {messages.length === 0 ? (

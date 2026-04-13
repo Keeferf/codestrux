@@ -50,7 +50,7 @@ export function ChatArea({
         </span>
       </div>
 
-      <div className="flex-1 overflow-hidden min-w-0 flex flex-col pb-18">
+      <div className="flex-1 overflow-hidden min-w-0 flex flex-col">
         <MessageList
           messages={messages}
           isLoading={isLoading}
