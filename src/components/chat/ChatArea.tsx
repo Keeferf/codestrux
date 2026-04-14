@@ -58,12 +58,6 @@ export function ChatArea({
         />
       </div>
 
-      {error && (
-        <div className="mx-4.5 mb-2 px-3 py-2 rounded-md bg-red-950/60 border border-red-900 font-mono text-xs text-red-400">
-          {error}
-        </div>
-      )}
-
       <InputBar
         input={input}
         canSend={canSend}
@@ -75,6 +69,7 @@ export function ChatArea({
         onFilesAttach={onFilesAttach}
         onFileRemove={onFileRemove}
         scrollbarWidth={scrollbarWidth}
+        error={error}
       />
     </main>
   );

@@ -17,6 +17,7 @@ interface InputBarProps {
   onFilesAttach: (files: AttachedFile[]) => void;
   onFileRemove: (fileId: string) => void;
   scrollbarWidth: number;
+  error: string | null;
 }
 
 export function InputBar({
@@ -30,6 +31,7 @@ export function InputBar({
   onFilesAttach,
   onFileRemove,
   scrollbarWidth,
+  error,
 }: InputBarProps) {
   const fileAttachRef = useRef<FileAttachmentRef | null>(null);
 
@@ -46,6 +48,13 @@ export function InputBar({
         className="pointer-events-auto w-full max-w-[calc(100%-19rem)] min-w-0 flex flex-col gap-0 pb-4 bg-slate-grey-950"
         style={{ transform: `translateX(-${scrollbarWidth / 2}px)` }}
       >
+        {/* Error message */}
+        {error && (
+          <div className="mx-1.5 mb-2 px-3 py-2 rounded-md bg-red-950/60 border border-red-900 font-mono text-xs text-red-400">
+            {error}
+          </div>
+        )}
+
         {/* File attachment area */}
         <div
           className={`transition-all duration-200 overflow-hidden ${
