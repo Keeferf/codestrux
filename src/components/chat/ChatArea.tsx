@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ChatMessage, CreativityKey, Session } from "../../types";
+import type { ChatMessage, Session } from "../../types";
 import { MessageList } from "./MessageList";
 import { InputBar } from "./InputBar";
 import { AttachedFile } from "./FileAttachment";
@@ -8,7 +8,6 @@ interface ChatAreaProps {
   activeSession: Session;
   messages: ChatMessage[];
   input: string;
-  creativity: CreativityKey;
   attachedFiles: AttachedFile[];
   onInputChange: (value: string) => void;
   onSend: () => void | Promise<void>;
@@ -58,12 +57,6 @@ export function ChatArea({
         />
       </div>
 
-      {error && (
-        <div className="mx-4.5 mb-2 px-3 py-2 rounded-md bg-red-950/60 border border-red-900 font-mono text-xs text-red-400">
-          {error}
-        </div>
-      )}
-
       <InputBar
         input={input}
         canSend={canSend}
@@ -75,6 +68,7 @@ export function ChatArea({
         onFilesAttach={onFilesAttach}
         onFileRemove={onFileRemove}
         scrollbarWidth={scrollbarWidth}
+        error={error}
       />
     </main>
   );
